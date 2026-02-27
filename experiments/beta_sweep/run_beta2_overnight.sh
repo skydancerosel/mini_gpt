@@ -10,6 +10,7 @@
 #   tail -f beta2_overnight.log
 #
 set -euo pipefail
+export PYTHONUNBUFFERED=1
 
 BETA2_VALUES="0.99 0.95 0.90 0.80 0.0"
 BASE_DIR="runs/beta2_ablation"

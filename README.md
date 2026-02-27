@@ -5,7 +5,7 @@ This repository studies the geometry of Transformer training dynamics, focusing 
 - **Low-dimensional drift ("backbone") structure** under AdamW
 - **Transverse switching dynamics** between competing objectives
 - **Optimizer-induced effects** (AdamW vs SGD family)
-- **Second-moment memory** ablations across varying AdamW hyperparameters
+- **Second-moment memory ablations** across varying AdamW hyperparameters
 - **Reheating** and capability recovery from late-training checkpoints
 
 The goal is to understand how optimizers shape training trajectories, not just loss curves.
@@ -71,7 +71,30 @@ Reheating from step 10,000 (p_ood = 0.16) with doubled probe weight and fresh op
 | **6e-4** | **0.782** | **1000** | **0.279** |
 | 3e-4 | 0.578 | 1500 | 0.421 |
 
-The optimal learning rate (6e-4) exceeds the original training-time peak of 0.777. Re-entry is transient: transverse probe dynamics are re-excited, but accumulated backbone drift remains intact. As the cosine schedule decays the learning rate, the backbone's restoring force dominates and the model returns to the LM-dominant regime.
+Peak probe recovery depends on learning rate, transverse curvature, and optimizer geometry. Re-entry is transient: transverse probe dynamics are re-excited, but accumulated backbone drift remains intact.
+
+---
+
+## Experimental Protocol (B-series)
+
+The B-series tests evaluate geometric and dynamical properties of training:
+
+| Test | Description | Script |
+|------|-------------|--------|
+| **B1** | Basin recovery from checkpoint (fresh optimizer, probe weight increase) | `analysis/basin/B1_basin_test.py` |
+| **B2** | Objective competition scatter (LM loss vs probe NLL tradeoff) | `analysis/basin/B1_basin_test.py` |
+| **B3** | Switching direction alignment (cos between update and switch vectors) | `analysis/basin/B1_basin_test.py` |
+| **B6** | Basin depth under perturbation | `analysis/basin/B6_basin_depth.py` |
+| **B7** | Switching manifold dimensionality (Gram-Schmidt residuals) | `analysis/basin/B6_basin_depth.py` |
+| **Fisher** | Curvature along backbone and transverse directions | `analysis/fisher/` |
+
+These are located under:
+
+```
+analysis/basin/          # B1-B3 basin tests, B6-B7 depth and dimensionality
+analysis/switching/      # Oscillation detection, block-level switching alignment
+analysis/fisher/         # Fisher spectrum, Rayleigh quotients, anisotropy
+```
 
 ---
 
@@ -79,44 +102,81 @@ The optimal learning rate (6e-4) exceeds the original training-time peak of 0.77
 
 Decoder-only Transformer (GPT-2 family): 8 layers, d_model=512, 16 heads, d_ff=2048, 51M parameters. Trained on [TinyStories](https://huggingface.co/datasets/roneneldan/TinyStories) with an embedded long-range key-retrieval probe task (10% of training sequences).
 
+---
+
 ## Repository Structure
 
 ```
 mini_gpt/
-├── paper/                          # Paper, figures, and build
+│
+├── training/                               # Core library and training
+│   ├── config.py                           #   Configuration dataclass
+│   ├── model.py                            #   GPT-2 model definition
+│   ├── dataset.py                          #   TinyStories + probe dataset
+│   ├── pilot.py                            #   Lightweight training / evaluation
+│   ├── train.py                            #   Main training loop
+│   ├── geometric.py                        #   Geometric analysis utilities
+│   └── control.py                          #   Subspace suppression
+│
+├── analysis/
+│   ├── backbone/                           # Backbone structure analysis
+│   │   ├── trajectory_pca.py               #   Uncentered PCA on cumulative drift
+│   │   ├── update_alignment.py             #   Update–backbone alignment (Step 11)
+│   │   └── residual_decomposition.py       #   Gradient alignment + energy split (Step 9)
+│   │
+│   ├── basin/                              # Basin geometry (B-series tests)
+│   │   ├── B1_basin_test.py                #   B1-B3: basin recovery, scatter, switching
+│   │   ├── B6_basin_depth.py               #   B6-B7: basin depth, manifold dimension
+│   │   └── eval_noise.py                   #   Bootstrap p_ood variance estimation
+│   │
+│   ├── switching/                          # Switching dynamics
+│   │   ├── switching_alignment.py          #   Block-level trajectory + logit lens
+│   │   └── detect_oscillations.py          #   Auto-detect peaks/troughs
+│   │
+│   ├── fisher/                             # Fisher information analysis
+│   │   ├── fisher_analysis.py              #   Empirical Fisher spectrum
+│   │   └── rayleigh_quotients.py           #   Backbone Rayleigh quotients (Step 10)
+│   │
+│   └── beta_sweep/                         # Second-moment memory ablation
+│       └── beta_summary.py                 #   Per-run + cross-run analysis
+│
+├── experiments/
+│   ├── sgd_controls/                       # SGD-family optimizer ablation
+│   │   ├── sgd_control.py                  #   Runs A (AdamW), B (SGD), C (SGD+mom)
+│   │   ├── sgd_nesterov_run.py             #   Run C': Nesterov + SGDW
+│   │   ├── sgd_control_analysis.py         #   3-way geometry comparison
+│   │   ├── sgd_matched_progress.py         #   Matched-step comparison
+│   │   ├── sgd_matched_valloss.py          #   Matched val-loss comparison
+│   │   └── run_a_backbone.py               #   Quick AdamW backbone analysis
+│   │
+│   ├── beta_sweep/                         # Second-moment memory experiments
+│   │   ├── run_beta2_overnight.sh          #   5-phase pipeline
+│   │   └── Overnight.md                    #   Experiment notes
+│   │
+│   └── reheating/                          # Reheating experiments
+│
+├── figures/                                # Plotting and visualization
+│   ├── make_paper_figures.py               #   Generate publication figures
+│   ├── plot.py                             #   General plotting utilities
+│   └── plot_delta_significance.py          #   Switch-pair significance plots
+│
+├── scripts/                                # Shell orchestration
+│   ├── run_seed.sh                         #   Full pipeline for a seed
+│   └── run_seed_auto.sh                    #   Multi-seed automation
+│
+├── paper/                                  # Paper and compiled PDF
 │   ├── paper_backbone.tex
 │   ├── paper_backbone.pdf
 │   ├── references.bib
 │   ├── Makefile
 │   └── figures/
 │
-├── config.py                       # Model/training configuration
-├── model.py                        # GPT-2 model definition
-├── dataset.py                      # TinyStories + probe dataset
-├── pilot.py                        # Evaluation utilities
-├── geometric.py                    # Geometric analysis helpers
-│
-├── train.py                        # Main AdamW training loop
-├── sgd_control.py                  # SGD-family ablation (Runs A/B/C)
-├── sgd_nesterov_run.py             # Run C': Nesterov + SGDW
-├── beta2_analysis.py               # Second-moment memory ablation
-├── run_seed.sh                     # Full pipeline for a seed
-├── run_seed_auto.sh                # Multi-seed automation
-│
-├── trajectory_pca_uncentered.py    # Backbone estimation (uncentered PCA)
-├── backbone_update_analysis.py     # Update-backbone alignment
-├── backbone_gradient_analysis.py   # Gradient isotropy analysis
-├── backbone_fisher_analysis.py     # Fisher Rayleigh quotients
-├── sgd_control_analysis.py         # 3-way geometry comparison
-├── sgd_matched_valloss.py          # Matched val-loss comparison
-├── sgd_matched_progress.py         # Matched progress comparison
-├── attractor_analysis.py           # Basin attractor geometry
-├── basin_geometry.py               # Basin depth analysis
-├── detect_oscillations.py          # Oscillation detection
-├── make_paper_figures.py           # Generate all paper figures
-│
-└── requirements.txt
+├── _paths.py                               # Path setup (import in scripts)
+├── requirements.txt
+└── README.md
 ```
+
+---
 
 ## Setup
 
@@ -130,23 +190,19 @@ Requires Python 3.10+ and PyTorch 2.0+. Runs on CUDA, MPS (Apple Silicon), or CP
 
 ```bash
 # Train seed 42 (AdamW, 10k steps)
-python train.py --seed 42
+python training/pilot.py --seed 42
 
 # SGD control experiments
-python sgd_control.py
-python sgd_nesterov_run.py
-
-# Second-moment memory ablation
-python beta2_analysis.py
+python experiments/sgd_controls/sgd_control.py
+python experiments/sgd_controls/sgd_nesterov_run.py
 
 # Backbone analysis
-python trajectory_pca_uncentered.py
-python backbone_fisher_analysis.py
-python sgd_control_analysis.py
-python sgd_matched_valloss.py
+python analysis/backbone/trajectory_pca.py
+python analysis/fisher/rayleigh_quotients.py
+python experiments/sgd_controls/sgd_control_analysis.py
 
 # Generate paper figures
-python make_paper_figures.py
+python figures/make_paper_figures.py
 ```
 
 ## Compiling the Paper
@@ -156,6 +212,8 @@ cd paper
 make pdf      # builds paper_backbone.pdf
 make clean    # removes build artifacts
 ```
+
+---
 
 ## Citation
 

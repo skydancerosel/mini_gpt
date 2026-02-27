@@ -1,3 +1,4 @@
+import sys, os; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')); import _paths  # noqa
 #!/usr/bin/env python3
 """
 Matched-progress comparison: backbone geometry at comparable val_loss levels.

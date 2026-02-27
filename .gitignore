@@ -38,3 +38,14 @@ arxiv_upload.zip
 
 # Claude config
 .claude/
+
+# Root-level backward-compat symlinks (for running experiments)
+/pilot.py
+/config.py
+/model.py
+/dataset.py
+/geometric.py
+/train.py
+/control.py
+/beta2_analysis.py
+/attractor_analysis.py

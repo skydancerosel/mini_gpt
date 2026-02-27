@@ -1,3 +1,4 @@
+import sys, os; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')); import _paths  # noqa
 #!/usr/bin/env python3
 """
 Backbone-aware gradient analysis (Step 9 additions: 9A, 9B, 9C).
