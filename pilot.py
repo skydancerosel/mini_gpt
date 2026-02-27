@@ -125,6 +125,20 @@ def main():
     parser.add_argument("--d-model", type=int, default=None)
     parser.add_argument("--n-head", type=int, default=None)
     parser.add_argument("--d-ff", type=int, default=None)
+    parser.add_argument("--beta2", type=float, default=None,
+                        help="AdamW beta2 (default: config default 0.95)")
+    parser.add_argument("--out-dir", type=str, default=None,
+                        help="Override output directory")
+    parser.add_argument("--ckpt-dense-from", type=int, default=None,
+                        help="Start step for dense checkpoint saving")
+    parser.add_argument("--ckpt-dense-to", type=int, default=None,
+                        help="End step for dense checkpoint saving")
+    parser.add_argument("--ckpt-dense-every", type=int, default=50,
+                        help="Checkpoint interval in dense region (default: 50)")
+    parser.add_argument("--ckpt-sparse-from", type=int, default=None,
+                        help="Start step for sparse checkpoint saving")
+    parser.add_argument("--ckpt-sparse-every", type=int, default=100,
+                        help="Checkpoint interval in sparse region (default: 100)")
     parser.add_argument("--resume-from", type=str, default=None,
                         help="Path to checkpoint to resume from (fresh optimizer, LR reset)")
     parser.add_argument("--continue-from", type=str, default=None,
@@ -142,6 +156,8 @@ def main():
         lr=args.lr,
         warmup_steps=args.warmup,
     )
+    if args.beta2 is not None:
+        cfg.adam_beta2 = args.beta2
     if args.n_layer is not None:
         cfg.n_layer = args.n_layer
     if args.d_model is not None:
@@ -155,11 +171,14 @@ def main():
     np.random.seed(cfg.seed)
     torch.manual_seed(cfg.seed)
 
-    out_dir = Path("runs") / f"pilot_wd{args.wd}_lr{args.lr}_lp{args.lambda_probe}_s{args.seed}"
+    if args.out_dir:
+        out_dir = Path(args.out_dir)
+    else:
+        out_dir = Path("runs") / f"pilot_wd{args.wd}_lr{args.lr}_lp{args.lambda_probe}_s{args.seed}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"{'='*70}")
-    print(f"  PILOT: wd={args.wd}, lr={args.lr}, steps={args.steps}, p_probe={args.p_probe}, lambda={args.lambda_probe}")
+    print(f"  PILOT: wd={args.wd}, lr={args.lr}, beta2={cfg.adam_beta2}, steps={args.steps}, p_probe={args.p_probe}, lambda={args.lambda_probe}")
     print(f"  Model: {cfg.n_layer}L, d={cfg.d_model}, h={cfg.n_head}, ff={cfg.d_ff}")
     print(f"  Device: {device}")
     print(f"  Output: {out_dir}")
@@ -347,6 +366,23 @@ def main():
             if len(recent) >= 5 and all(r >= 0.8 for r in recent):
                 print(f"\n  >>> GROKKED at step {step}! (probe_ood >= 0.8 for 5 evals)")
                 break
+
+        # Additional checkpoint saves (dense/sparse cadence, between eval points)
+        if not (step % args.eval_every == 0 or step == 1):
+            save_ckpt = False
+            if (args.ckpt_dense_from is not None and
+                args.ckpt_dense_to is not None and
+                args.ckpt_dense_from <= step <= args.ckpt_dense_to and
+                step % args.ckpt_dense_every == 0):
+                save_ckpt = True
+            if (args.ckpt_sparse_from is not None and
+                step >= args.ckpt_sparse_from and
+                step % args.ckpt_sparse_every == 0):
+                save_ckpt = True
+            if save_ckpt:
+                ckpt_path = out_dir / f"ckpt_{step:06d}.pt"
+                torch.save({"step": step,
+                            "model_state_dict": model.state_dict()}, ckpt_path)
 
     # Save results
     with open(out_dir / "pilot_metrics.json", "w") as f:
