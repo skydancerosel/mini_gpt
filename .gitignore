@@ -1,0 +1,45 @@
+# Checkpoint runs (97GB+)
+runs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.log
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+
+# Keep the compiled PDF for paper_backbone only
+# (exclude old paper.pdf build artifacts)
+paper.aux
+paper.bbl
+paper.blg
+paper.log
+paper.out
+paper.pdf
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Claude config
+.claude/

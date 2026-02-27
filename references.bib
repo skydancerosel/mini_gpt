@@ -1,0 +1,395 @@
+% ═══════════════════════════════════════════════════════════════════════════════
+%  References for: Optimizer-Integrated Drift and Transverse Attractor Switching
+%  (and companion paper on oscillation phenomenology)
+% ═══════════════════════════════════════════════════════════════════════════════
+
+% --- Optimizers ---
+
+@inproceedings{loshchilov2019decoupled,
+  title     = {Decoupled Weight Decay Regularization},
+  author    = {Loshchilov, Ilya and Hutter, Frank},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2019},
+  url       = {https://arxiv.org/abs/1711.05101},
+}
+
+@inproceedings{kingma2015adam,
+  title     = {Adam: A Method for Stochastic Optimization},
+  author    = {Kingma, Diederik P. and Ba, Jimmy},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2015},
+  url       = {https://arxiv.org/abs/1412.6980},
+}
+
+% --- Language models and data ---
+
+@techreport{radford2019language,
+  title       = {Language Models are Unsupervised Multitask Learners},
+  author      = {Radford, Alec and Wu, Jeffrey and Child, Rewon and
+                 Luan, David and Amodei, Dario and Sutskever, Ilya},
+  institution = {OpenAI},
+  year        = {2019},
+  url         = {https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf},
+}
+
+@article{eldan2023tinystories,
+  title   = {{TinyStories}: How Small Can Language Models Be and Still Speak
+             Coherent {English}?},
+  author  = {Eldan, Ronen and Li, Yuanzhi},
+  journal = {arXiv preprint arXiv:2305.07759},
+  year    = {2023},
+  url     = {https://arxiv.org/abs/2305.07759},
+}
+
+@inproceedings{vaswani2017attention,
+  title     = {Attention Is All You Need},
+  author    = {Vaswani, Ashish and Shazeer, Noam and Parmar, Niki and
+               Uszkoreit, Jakob and Jones, Llion and Gomez, Aidan N. and
+               Kaiser, Lukasz and Polosukhin, Illia},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  volume    = {30},
+  year      = {2017},
+  url       = {https://arxiv.org/abs/1706.03762},
+}
+
+% --- Grokking ---
+
+@inproceedings{power2022grokking,
+  title     = {Grokking: Generalization Beyond Overfitting on Small Algorithmic
+               Datasets},
+  author    = {Power, Alethea and Burda, Yuri and Edwards, Harri and
+               Babuschkin, Igor and Misra, Vedant},
+  booktitle = {ICLR Workshop on MATH-AI},
+  year      = {2022},
+  url       = {https://arxiv.org/abs/2201.02177},
+}
+
+@article{nanda2023progress,
+  title   = {Progress Measures for Grokking via Mechanistic Interpretability},
+  author  = {Nanda, Neel and Chan, Lawrence and Lieberum, Tom and
+             Smith, Jess and Steinhardt, Jacob},
+  journal = {arXiv preprint arXiv:2301.05217},
+  year    = {2023},
+}
+
+@article{liu2023omnigrok,
+  title   = {Omnigrok: Grokking Beyond Algorithmic Data},
+  author  = {Liu, Ziming and Kitouni, Ouail and Nolte, Niklas and
+             Michaud, Eric J. and Tegmark, Max and Williams, Mike},
+  journal = {arXiv preprint arXiv:2210.01117},
+  year    = {2023},
+}
+
+@article{merrill2023tale,
+  title   = {A Tale of Two Circuits: Grokking as Competition of Sparse and Dense
+             Subnetworks},
+  author  = {Merrill, William and Tsilivis, Nikolaos and Shukla, Aman},
+  journal = {arXiv preprint arXiv:2303.11873},
+  year    = {2023},
+}
+
+@article{lyu2023dichotomy,
+  title   = {Dichotomy of Early and Late Phase Implicit Biases Can Provably
+             Induce Grokking},
+  author  = {Lyu, Kaifeng and Jin, Jikai and Li, Zhiyuan and Du, Simon S. and
+             Lee, Jason D. and Hu, Wei},
+  journal = {arXiv preprint arXiv:2311.18817},
+  year    = {2023},
+}
+
+% --- Multi-task learning ---
+
+@article{caruana1997multitask,
+  title     = {Multitask Learning},
+  author    = {Caruana, Rich},
+  journal   = {Machine Learning},
+  volume    = {28},
+  number    = {1},
+  pages     = {41--75},
+  year      = {1997},
+  publisher = {Springer},
+}
+
+@inproceedings{yu2020gradient,
+  title     = {Gradient Surgery for Multi-Task Learning},
+  author    = {Yu, Tianhe and Kumar, Saurabh and Gupta, Abhishek and
+               Levine, Sergey and Hausman, Karol and Finn, Chelsea},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  volume    = {33},
+  year      = {2020},
+  url       = {https://arxiv.org/abs/2001.06782},
+}
+
+% --- Catastrophic forgetting ---
+
+@incollection{mccloskey1989catastrophic,
+  title     = {Catastrophic Interference in Connectionist Networks: The
+               Sequential Learning Problem},
+  author    = {McCloskey, Michael and Cohen, Neal J.},
+  booktitle = {Psychology of Learning and Motivation},
+  volume    = {24},
+  pages     = {109--165},
+  year      = {1989},
+  publisher = {Academic Press},
+}
+
+@article{kirkpatrick2017overcoming,
+  title   = {Overcoming Catastrophic Forgetting in Neural Networks},
+  author  = {Kirkpatrick, James and Pascanu, Razvan and Rabinowitz, Neil and
+             Veness, Joel and Desjardins, Guillaume and Rusu, Andrei A. and
+             Milan, Kieran and Quan, John and Ramalho, Tiago and
+             Grabska-Barwinska, Agnieszka and Hassabis, Demis and
+             Clopath, Claudia and Kumaran, Dharshan and Hadsell, Raia},
+  journal = {Proceedings of the National Academy of Sciences},
+  volume  = {114},
+  number  = {13},
+  pages   = {3521--3526},
+  year    = {2017},
+  url     = {https://arxiv.org/abs/1612.00796},
+}
+
+% --- Loss landscape and geometry ---
+
+@inproceedings{li2018visualizing,
+  title     = {Visualizing the Loss Landscape of Neural Nets},
+  author    = {Li, Hao and Xu, Zheng and Taylor, Gavin and
+               Studer, Christoph and Goldstein, Tom},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  volume    = {31},
+  year      = {2018},
+  url       = {https://arxiv.org/abs/1712.09913},
+}
+
+@inproceedings{garipov2018loss,
+  title     = {Loss Surfaces, Mode Connectivity, and Fast Ensembling of {DNNs}},
+  author    = {Garipov, Timur and Izmailov, Pavel and Podoprikhin, Dmitrii and
+               Vetrov, Dmitry P. and Wilson, Andrew Gordon},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  volume    = {31},
+  year      = {2018},
+  url       = {https://arxiv.org/abs/1802.10026},
+}
+
+@inproceedings{frankle2020linear,
+  title     = {Linear Mode Connectivity and the Lottery Ticket Hypothesis},
+  author    = {Frankle, Jonathan and Dziugaite, Gintare Karolina and
+               Roy, Daniel M. and Carbin, Michael},
+  booktitle = {International Conference on Machine Learning (ICML)},
+  pages     = {3259--3269},
+  year      = {2020},
+  url       = {https://arxiv.org/abs/1912.05671},
+}
+
+@inproceedings{draxler2018essentially,
+  title     = {Essentially No Barriers in Neural Network Energy Landscape},
+  author    = {Draxler, Felix and Veschgini, Kambis and Salmhofer, Manfred
+               and Hamprecht, Fred},
+  booktitle = {International Conference on Machine Learning (ICML)},
+  year      = {2018},
+}
+
+% --- Fisher information and natural gradient ---
+
+@article{martens2020new,
+  title   = {New Insights and Perspectives on the Natural Gradient Method},
+  author  = {Martens, James},
+  journal = {Journal of Machine Learning Research},
+  volume  = {21},
+  number  = {146},
+  pages   = {1--76},
+  year    = {2020},
+  url     = {https://arxiv.org/abs/1412.1193},
+}
+
+% --- Training dynamics ---
+
+@inproceedings{saxe2014exact,
+  title     = {Exact Solutions to the Nonlinear Dynamics of Learning in Deep
+               Linear Neural Networks},
+  author    = {Saxe, Andrew M. and McClelland, James L. and Ganguli, Surya},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2014},
+  url       = {https://arxiv.org/abs/1312.6120},
+}
+
+@article{cohen2021gradient,
+  title   = {Gradient Descent on Neural Networks Typically Occurs at the Edge of
+             Stability},
+  author  = {Cohen, Jeremy and Kaur, Simran and Li, Yuanzhi and Kolter, J. Zico
+             and Talwalkar, Ameet},
+  journal = {International Conference on Learning Representations (ICLR)},
+  year    = {2021},
+}
+
+@article{lewkowycz2020large,
+  title   = {The Large Learning Rate Phase of Neural Network Training},
+  author  = {Lewkowycz, Aitor and Bahri, Yasaman and Dyer, Ethan and
+             Sohl-Dickstein, Jascha and Gur-Ari, Guy},
+  journal = {arXiv preprint arXiv:2002.10434},
+  year    = {2020},
+}
+
+% --- Hessian and curvature ---
+
+@article{hochreiter1997flat,
+  title   = {Flat Minima},
+  author  = {Hochreiter, Sepp and Schmidhuber, J{\"u}rgen},
+  journal = {Neural Computation},
+  volume  = {9},
+  number  = {1},
+  pages   = {1--42},
+  year    = {1997},
+}
+
+@inproceedings{keskar2017large,
+  title     = {On Large-Batch Training for Deep Learning: Generalization Gap
+               and Sharp Minima},
+  author    = {Keskar, Nitish Shirish and Mudigere, Dheevatsa and
+               Nocedal, Jorge and Smelyanskiy, Mikhail and
+               Tang, Ping Tak Peter},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2017},
+}
+
+@inproceedings{sagun2017empirical,
+  title     = {Empirical Analysis of the {Hessian} of Overparameterized Neural
+               Networks},
+  author    = {Sagun, Levent and Evci, Utku and G{\"u}ney, V. Ugur and
+               Dauphin, Yann and Bottou, Leon},
+  booktitle = {ICLR Workshop},
+  year      = {2017},
+}
+
+@inproceedings{ghorbani2019investigation,
+  title     = {An Investigation into Neural Net Optimization via {Hessian}
+               Eigenvalue Density},
+  author    = {Ghorbani, Behrooz and Krishnan, Shankar and Xiao, Ying},
+  booktitle = {International Conference on Machine Learning (ICML)},
+  year      = {2019},
+}
+
+% --- SGD dynamics and noise ---
+
+@article{zhu2019anisotropic,
+  title   = {The Anisotropic Noise in Stochastic Gradient Descent: Its Behavior
+             of Escaping from Sharp Minima and Regularization Effects},
+  author  = {Zhu, Zhanxing and Wu, Jingfeng and Yu, Bing and Wu, Lei and
+             Ma, Jinwen},
+  journal = {International Conference on Machine Learning (ICML)},
+  year    = {2019},
+}
+
+@article{wu2020noisy,
+  title   = {Noisy Quadratic Model Reveals {SGD} Dynamics},
+  author  = {Wu, Jingfeng and Hu, Wenqing and Xiong, Haoyi and Huan, Jun and
+             Braverman, Vladimir and Zhu, Zhanxing},
+  journal = {arXiv preprint arXiv:2001.02471},
+  year    = {2020},
+}
+
+@article{xie2021diffusion,
+  title   = {A Diffusion Theory for Deep Learning Dynamics: Stochastic Gradient
+             Descent Exponentially Favors Flat Minima},
+  author  = {Xie, Zeke and Sato, Issei and Sugiyama, Masashi},
+  journal = {International Conference on Learning Representations (ICLR)},
+  year    = {2021},
+}
+
+% --- Lottery tickets ---
+
+@inproceedings{frankle2019lottery,
+  title     = {The Lottery Ticket Hypothesis: Finding Sparse, Trainable Neural
+               Networks},
+  author    = {Frankle, Jonathan and Carbin, Michael},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2019},
+}
+
+% --- Transfer learning ---
+
+@article{neyshabur2020being,
+  title   = {What Is Being Transferred in Transfer Learning?},
+  author  = {Neyshabur, Behnam and Sedghi, Hanie and Zhang, Chiyuan},
+  journal = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year    = {2020},
+}
+
+% --- Generalization ---
+
+@inproceedings{neyshabur2017exploring,
+  title     = {Exploring Generalization in Deep Networks},
+  author    = {Neyshabur, Behnam and Bhojanapalli, Srinadh and
+               McAllester, David and Srebro, Nati},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2017},
+}
+
+% --- Mean field and particle systems ---
+
+@article{mei2018mean,
+  title   = {A Mean Field View of the Landscape of Two-Layer Neural Networks},
+  author  = {Mei, Song and Montanari, Andrea and Nguyen, Phan-Minh},
+  journal = {Proceedings of the National Academy of Sciences},
+  volume  = {115},
+  number  = {33},
+  pages   = {E7665--E7671},
+  year    = {2018},
+}
+
+@article{advani2020high,
+  title   = {High-Dimensional Dynamics of Generalization Error in Neural
+             Networks},
+  author  = {Advani, Madhu S. and Saxe, Andrew M. and Sompolinsky, Haim},
+  journal = {Neural Networks},
+  volume  = {132},
+  pages   = {428--446},
+  year    = {2020},
+}
+
+@article{rotskoff2022trainability,
+  title   = {Trainability and Accuracy of Artificial Neural Networks: An
+             Interacting Particle System Approach},
+  author  = {Rotskoff, Grant M. and Vanden-Eijnden, Eric},
+  journal = {Communications on Pure and Applied Mathematics},
+  volume  = {75},
+  number  = {9},
+  pages   = {1889--1935},
+  year    = {2022},
+}
+
+% --- Miscellaneous ---
+
+@inproceedings{chaudhari2019entropy,
+  title     = {Entropy-{SGD}: Biasing Gradient Descent into Wide Valleys},
+  author    = {Chaudhari, Pratik and Choromanska, Anna and Soatto, Stefano and
+               LeCun, Yann and Baldassi, Carlo and Borgs, Christian and
+               Chayes, Jennifer and Sagun, Levent and Zecchina, Riccardo},
+  journal   = {Journal of Machine Learning Research},
+  volume    = {20},
+  pages     = {1--45},
+  year      = {2019},
+}
+
+@article{goodfellow2015qualitatively,
+  title   = {Qualitatively Characterizing Neural Network Optimization Problems},
+  author  = {Goodfellow, Ian J. and Vinyals, Oriol and Saxe, Andrew M.},
+  journal = {International Conference on Learning Representations (ICLR)},
+  year    = {2015},
+}
+
+@inproceedings{smith2018dont,
+  title     = {Don't Decay the Learning Rate, Increase the Batch Size},
+  author    = {Smith, Samuel L. and Kindermans, Pieter-Jan and Ying, Chris
+               and Le, Quoc V.},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2018},
+}
+
+@book{gardiner2009stochastic,
+  title     = {Stochastic Methods: A Handbook for the Natural and Social
+               Sciences},
+  author    = {Gardiner, Crispin},
+  edition   = {4th},
+  publisher = {Springer},
+  year      = {2009},
+}

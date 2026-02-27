@@ -1,0 +1,1255 @@
+\documentclass[11pt,a4paper]{article}
+
+% ── Packages ──────────────────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{xcolor}
+\usepackage{microtype}
+\usepackage[margin=1in]{geometry}
+\usepackage{natbib}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{bm}
+
+% ── Math operators ────────────────────────────────────────────────────────────
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\Tr}{Tr}
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\E}{\mathbb{E}}
+\DeclareMathOperator{\sgn}{sgn}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\newcommand{\vb}{\mathbf{v}_{\mathrm{b}}}
+\newcommand{\vswitch}{\mathbf{v}_{\mathrm{sw}}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\inner}[2]{\langle #1,\, #2 \rangle}
+\newcommand{\norm}[1]{\lVert #1 \rVert}
+\newcommand{\abs}[1]{\lvert #1 \rvert}
+
+\newtheorem{definition}{Definition}
+\newtheorem{proposition}{Proposition}
+\newtheorem{remark}{Remark}
+
+% ══════════════════════════════════════════════════════════════════════════════
+\title{Optimizer-Induced Low-Dimensional Drift and Transverse Dynamics\\in Transformer Training}
+\author{Yongzhong Xu\thanks{\texttt{abbyxu@gmail.com}}}
+\date{Code: \url{https://github.com/skydancerosel/mini_gpt}}
+
+\begin{document}
+\maketitle
+
+% ══════════════════════════════════════════════════════════════════════════════
+\begin{abstract}
+We analyze the cumulative parameter trajectory of transformer training under
+AdamW and identify a stable, low-dimensional drift direction that captures the
+majority of long-horizon displacement from initialization.  This ``backbone''
+accounts for 60--80\% of cumulative drift across blocks and remains temporally
+stable throughout training.  Strikingly, instantaneous per-batch gradients are
+nearly isotropic relative to this direction, and it is orthogonal to top Fisher
+curvature modes.  Instead, the backbone emerges from optimizer integration:
+momentum amplifies weak but temporally coherent gradient bias, while adaptive
+normalization suppresses incoherent transverse fluctuations.
+
+Replacing AdamW with SGD-family optimizers eliminates this structure.  Even at
+matched validation loss, SGD trajectories remain nearly colinear and fail to
+develop the multi-dimensional slow--fast geometry observed under AdamW,
+demonstrating that the backbone is optimizer-induced rather than
+loss-landscape-determined.
+
+Oscillatory regime switching between competing objectives occurs primarily in
+directions transverse to the backbone.  Reheating experiments show that
+transverse modes can be transiently re-excited from late-training checkpoints
+without erasing accumulated backbone drift, consistent with a slow--fast
+decomposition of training dynamics.
+
+These results shift attention from instantaneous gradient geometry to cumulative
+trajectory structure and provide a concrete empirical characterization of
+optimizer-induced implicit bias in transformer training.
+\end{abstract}
+
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Introduction}\label{sec:intro}
+
+Training dynamics in deep neural networks are typically analyzed through the
+geometry of the loss landscape: curvature, sharpness, and stochastic gradient
+noise are taken to determine how optimization proceeds.  While this perspective
+captures important local properties of learning, it emphasizes instantaneous
+gradient structure rather than the accumulated trajectory of parameters over
+long training horizons.
+
+In high-dimensional models, these two viewpoints need not coincide.  Per-step
+gradients may be large and highly variable, yet their cumulative displacement
+can concentrate in a small number of coherent directions.  Understanding this
+cumulative geometry is essential for characterizing optimizer-induced implicit
+bias and long-horizon training behavior.
+
+In this work, we study the global parameter trajectory of transformer training
+under AdamW~\citep{loshchilov2019decoupled}.  Rather than analyzing local
+curvature or single-step gradients, we examine cumulative displacement from
+initialization across checkpoints.  We find that training admits a stable
+low-dimensional drift direction---which we term the \emph{backbone}---that
+captures the majority of cumulative parameter movement.  Across blocks and
+seeds, the first principal component of uncentered trajectory PCA explains
+60--80\% of total drift, and this direction remains nearly fixed throughout
+training.
+
+Crucially, the backbone is not aligned with instantaneous gradient directions
+and is nearly orthogonal to leading Fisher curvature
+modes~\citep{martens2020new}.  Per-batch gradients are close to isotropic
+relative to the backbone.  However, the optimizer-integrated update---after
+momentum accumulation and adaptive per-parameter
+normalization~\citep{kingma2015adam}---exhibits strong alignment with it.  This
+demonstrates that the backbone is not a property of the loss landscape alone,
+but an emergent property of optimizer dynamics.
+
+To test this interpretation, we replace AdamW with SGD-family optimizers while
+holding model, data, and schedule fixed.  Under SGD with or without momentum,
+trajectories remain nearly colinear and fail to develop the multi-dimensional
+structure observed under AdamW---even at matched validation loss.  This
+establishes that the backbone is optimizer-induced rather than a generic feature
+of the objective.
+
+We further examine the dynamical consequences of this structure.  Oscillatory
+regime switching between competing objectives occurs primarily in directions
+transverse to the backbone.  Reheating experiments show that these transverse
+modes can be transiently re-excited from late-training checkpoints without
+substantially altering accumulated backbone drift.  This behavior is consistent
+with a slow--fast decomposition: a low-dimensional, optimizer-shaped drift
+manifold governs long-horizon evolution, while high-dimensional transverse
+dynamics mediate switching.
+
+Together, these findings shift attention from instantaneous gradient geometry to
+cumulative trajectory structure.  They provide a concrete empirical
+characterization of optimizer-induced implicit bias in transformer training and
+suggest that adaptive optimization reshapes not only convergence rates but the
+geometry of learning itself.
+
+\paragraph{Relation to prior work.}
+The separation of dynamics into slow and fast components has classical roots in
+dynamical systems theory, particularly in slow manifold and time-scale
+separation results such as Fenichel-type
+theorems~\citep{saxe2014exact}.  In optimization and deep learning, related
+ideas appear in analyses of momentum methods and adaptive optimizers, where
+Adam-type algorithms are understood as inducing effective geometry changes
+through preconditioning and sign-consistent
+updates~\citep{kingma2015adam,loshchilov2019decoupled,cohen2021gradient}.
+Recent work has also emphasized implicit bias and trajectory-level properties of
+high-dimensional training
+dynamics~\citep{lewkowycz2020large,power2022grokking,frankle2020linear}.
+
+Our contribution differs in emphasis and object of study.  Rather than analyzing
+local curvature, stationary points, or instantaneous update rules, we examine
+the cumulative geometry of training trajectories and identify a stable drift
+direction that dominates long-horizon parameter displacement.  We show that this
+backbone direction is not aligned with per-batch gradients or with top curvature
+modes, but instead emerges from optimizer-integrated temporal coherence.  This
+shifts attention from static loss-landscape structure to trajectory-level
+geometry, providing a concrete empirical characterization of optimizer-induced
+slow-manifold behavior in transformer training.
+
+
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Experimental Setup}\label{sec:setup}
+
+\subsection{Model and Data}
+
+We train a decoder-only Transformer~\citep{vaswani2017attention} in the GPT-2
+family~\citep{radford2019language}: 8 layers, $d_{\mathrm{model}}=512$, 16
+attention heads, $d_{\mathrm{ff}}=2048$, totalling 51M parameters.  The
+training corpus is TinyStories~\citep{eldan2023tinystories}.  With probability
+$p_{\mathrm{probe}}=0.10$, a training sequence is replaced by a probe sequence
+containing a codeword--value pair; the model must predict the value token given
+the codeword at out-of-distribution gap distances.
+
+\subsection{Training Configuration}
+
+\begin{table}[h]
+\centering
+\caption{Training hyperparameters.}
+\label{tab:hyperparams}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Optimizer              & AdamW ($\beta_1{=}0.9$, $\beta_2{=}0.95$) \\
+Learning rate          & $10^{-3}$, cosine decay, 1500-step warmup \\
+Weight decay           & 0.5 \\
+Probe loss weight $\lambda$ & 2.0 (steps 1--3999), 4.0 (steps 4000--10000) \\
+Effective batch size   & 128 ($64 \times 2$ gradient accumulation) \\
+Total steps            & 10{,}000 \\
+Checkpoint interval    & 200 steps (51 checkpoints) \\
+Seeds                  & 42, 271 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The composite loss at each training step is
+\begin{equation}\label{eq:composite-loss}
+    \mathcal{L}(\bm{\theta}) \;=\; \mathcal{L}_{\mathrm{LM}}(\bm{\theta})
+    \;+\; \lambda\,\mathcal{L}_{\mathrm{probe}}(\bm{\theta}),
+\end{equation}
+where $\mathcal{L}_{\mathrm{LM}}$ is the standard next-token prediction
+cross-entropy and $\mathcal{L}_{\mathrm{probe}}$ is the cross-entropy on the
+codeword retrieval task.  The weight $\lambda$ is doubled at step 4000 to
+intensify probe competition.
+
+\subsection{Oscillation Phenomenology (Brief)}
+
+Over 10{,}000 steps, the out-of-distribution probe accuracy $p_{\mathrm{ood}}$
+oscillates between 0.40 and 0.78 (seed~42) or 0.20 and 0.67 (seed~271), while
+the LM validation loss decreases monotonically from ${\sim}10$ to ${\sim}1.2$.
+The oscillations damp after step ${\sim}7000$, and the model settles into an
+LM-dominant regime ($p_{\mathrm{ood}} < 0.20$).  We set aside the full
+oscillation phenomenology and focus on the geometric structure of the underlying
+training trajectory.
+
+
+% ══════════════════════════════════════════════════════════════════════════════
+\section{The Backbone}\label{sec:backbone}
+
+\subsection{Trajectory PCA: One Direction Dominates}\label{sec:pca}
+
+We analyze the cumulative parameter drift using \emph{uncentered} principal
+component analysis.  Let $\bm{\theta}(t) \in \R^D$ denote the vectorized
+parameters of a single transformer block at checkpoint~$t$, with block
+dimensionality $D \approx 3.1 \times 10^6$.
+
+\begin{definition}[Drift matrix]
+    The drift matrix $\mathbf{X} \in \R^{T \times D}$ has rows
+    \begin{equation}\label{eq:drift}
+        \mathbf{x}(t) \;=\; \bm{\theta}(t) - \bm{\theta}(0),
+        \qquad t = 1,\ldots,T,
+    \end{equation}
+    where $T = 51$ is the number of checkpoints.
+\end{definition}
+
+We deliberately omit mean centering before computing the SVD.  Standard
+(centered) PCA would subtract the mean drift
+$\bar{\mathbf{x}} = T^{-1}\sum_t \mathbf{x}(t)$, which removes the monotonic
+component and conflates it with the first principal component.  Since all drifts
+are relative to initialization, there is no reason to assume zero-mean
+variation.
+
+The singular value decomposition
+\begin{equation}\label{eq:svd}
+    \mathbf{X} \;=\; \mathbf{U}\,\bm{\Sigma}\,\mathbf{V}^{\!\top},
+\end{equation}
+where $\bm{\Sigma} = \diag(\sigma_1, \sigma_2, \ldots, \sigma_{\min(T,D)})$
+with $\sigma_1 \geq \sigma_2 \geq \cdots \geq 0$, yields the principal
+directions as the columns of $\mathbf{V}$.  The fraction of total squared drift
+captured by the $k$-th component is
+\begin{equation}\label{eq:var-explained}
+    \rho_k \;=\; \frac{\sigma_k^2}{\sum_{j=1}^{\min(T,D)} \sigma_j^2}.
+\end{equation}
+
+\begin{table}[t]
+\centering
+\caption{Variance explained by PC1 ($\rho_1$, \%) per transformer block.}
+\label{tab:pca-variance}
+\begin{tabular}{@{}lcccccccc@{}}
+\toprule
+\textbf{Seed} & \textbf{Blk 0} & \textbf{Blk 1} & \textbf{Blk 2} &
+\textbf{Blk 3} & \textbf{Blk 4} & \textbf{Blk 5} & \textbf{Blk 6} &
+\textbf{Blk 7} \\
+\midrule
+42  & 80.5 & 81.2 & 80.7 & 80.2 & 79.7 & 79.0 & 78.8 & 77.9 \\
+271 & 78.6 & 80.6 & 80.4 & 80.4 & 80.1 & 79.1 & 79.3 & 78.3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\Cref{tab:pca-variance} shows that PC1 captures \textbf{78--81\%} of the
+total squared drift in every block, in both seeds.  The training trajectory is
+overwhelmingly one-dimensional.  We call this direction the
+\textbf{backbone}, denoted $\vb$.
+
+\begin{remark}[Why uncentered PCA?]
+Standard PCA centers the data by subtracting the column mean before SVD.  For
+trajectory analysis, centering removes the dominant monotonic drift and
+distributes it across all components.  Uncentered PCA preserves the absolute
+direction of displacement from initialization.  In our setting, this correctly
+identifies the persistent LM-driven drift as the leading component.  The
+mathematical difference is that centered PCA diagonalizes the covariance matrix
+$\frac{1}{T}\mathbf{X}^{\!\top}\mathbf{X} - \bar{\mathbf{x}}\bar{\mathbf{x}}^{\!\top}$,
+while uncentered PCA diagonalizes
+$\frac{1}{T}\mathbf{X}^{\!\top}\mathbf{X}$ directly.
+\end{remark}
+
+\subsection{Temporal Stability of the Backbone}\label{sec:stability}
+
+A rolling window analysis (width $W = 10$ checkpoints, $\approx$2000 steps)
+tracks the local PC1 direction $\vb^{(w)}$ at each window position $w$ and
+measures its alignment with the global $\vb$.  Define
+\begin{equation}\label{eq:rolling-cos}
+    c(w) \;=\; \abs{\inner{\vb^{(w)}}{\vb}}
+    \;=\; \abs{\cos\angle(\vb^{(w)},\,\vb)}.
+\end{equation}
+The mean of $c(w)$ across all windows is $0.997$--$0.998$ for both seeds,
+indicating that the backbone direction is essentially fixed from early training
+onward.  It is not an artifact of averaging over distinct dynamical phases.
+
+\subsection{Backbone--Residual Decomposition}\label{sec:decomposition}
+
+\begin{definition}[Backbone decomposition]
+    The parameter vector at step $t$ is decomposed as
+    \begin{equation}\label{eq:backbone-decomp}
+        \bm{\theta}(t) \;=\;
+        \bm{\theta}(0) \;+\; a(t)\,\vb \;+\; \mathbf{r}(t),
+    \end{equation}
+    where the \emph{backbone coordinate} is the signed projection
+    \begin{equation}\label{eq:backbone-coord}
+        a(t) \;=\; \inner{\bm{\theta}(t) - \bm{\theta}(0)}{\vb},
+    \end{equation}
+    and the \emph{residual} $\mathbf{r}(t) \perp \vb$ captures all
+    non-backbone displacement:
+    \begin{equation}\label{eq:residual}
+        \mathbf{r}(t) \;=\;
+        \bigl[\bm{\theta}(t) - \bm{\theta}(0)\bigr]
+        \;-\; a(t)\,\vb.
+    \end{equation}
+\end{definition}
+
+The backbone coordinate $a(t)$ grows monotonically---it tracks the steady
+LM-driven drift.  The residual $\mathbf{r}(t)$ contains the oscillatory
+dynamics: its norm $\norm{\mathbf{r}(t)}$ fluctuates in phase with
+$p_{\mathrm{ood}}$ oscillations.  At the final checkpoint, the backbone
+fraction
+\begin{equation}\label{eq:backbone-fraction}
+    f_{\mathrm{b}}(t) \;=\;
+    \frac{a(t)^2}{\norm{\bm{\theta}(t) - \bm{\theta}(0)}^2}
+    \;=\;
+    \frac{a(t)^2}{a(t)^2 + \norm{\mathbf{r}(t)}^2}
+\end{equation}
+is 68--72\%.  This establishes a clean separation: the backbone carries the
+monotonic LM drift, while the residual carries the switching dynamics.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/fig_A_backbone_decomposition.pdf}
+    \caption{\textbf{Backbone--residual decomposition (seed~42, Block~0).}
+    \emph{Left:} the backbone coordinate $a(t)$ grows monotonically while the
+    residual norm $\norm{\mathbf{r}(t)}$ oscillates and then decays.
+    \emph{Right:} the out-of-distribution probe accuracy $p_{\mathrm{ood}}$
+    (grey) fluctuates in phase with the residual---but the backbone is
+    impervious.  The vertical dashed line marks the $\lambda$-transition at
+    step~4000.}
+    \label{fig:backbone-decomp}
+\end{figure}
+
+
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Mechanism: How the Backbone Emerges}\label{sec:mechanism}
+
+This section presents the central result.  We show that the backbone is an
+emergent property of optimizer integration, not of instantaneous gradient
+alignment.
+
+\subsection{The Puzzle: Per-Batch Gradients Do Not Align}\label{sec:puzzle}
+
+An intuitive expectation is that the backbone arises because gradients
+consistently point along it.  This is false.
+
+At each checkpoint, we compute the per-batch combined-loss gradient
+$\mathbf{g}_t = \nabla_{\bm{\theta}} \mathcal{L}(\bm{\theta}(t))$ and measure
+its cosine similarity with $\vb$.  Across 16 mini-batches per checkpoint:
+\begin{equation}\label{eq:grad-alignment}
+    \abs{\cos\angle(\mathbf{g}_t,\,\vb)}
+    \;\approx\; 0.008\text{--}0.012.
+\end{equation}
+To understand why, recall that for two independent random unit vectors
+$\mathbf{a}, \mathbf{b} \in \R^D$, the expected absolute cosine similarity is
+\begin{equation}\label{eq:random-cos}
+    \E\bigl[\abs{\inner{\mathbf{a}}{\mathbf{b}}}\bigr]
+    \;=\; \sqrt{\frac{2}{\pi\,D}}.
+\end{equation}
+For $D = 3.1 \times 10^6$, this yields $\approx 4.5 \times 10^{-4}$.  The
+observed $\abs{\cos} \approx 0.01$ is modestly above this (due to gradient
+structure), but still at the noise floor.
+
+\begin{proposition}[Noise-floor scaling]\label{prop:noise-floor}
+    For a gradient vector $\mathbf{g} \in \R^D$ with effective dimensionality
+    $d_{\mathrm{eff}} \ll D$ (i.e., the gradient energy concentrates on
+    $d_{\mathrm{eff}}$ directions), the expected projection onto a fixed unit
+    vector $\vb$ scales as
+    \begin{equation}
+        \E\bigl[\abs{\inner{\hat{\mathbf{g}}}{\vb}}\bigr]
+        \;\sim\; \frac{1}{\sqrt{d_{\mathrm{eff}}}},
+    \end{equation}
+    where $\hat{\mathbf{g}} = \mathbf{g}/\norm{\mathbf{g}}$.  Since gradients
+    in deep networks typically have $d_{\mathrm{eff}} \gg 1$, the alignment
+    with any fixed direction is small.
+\end{proposition}
+
+\textbf{No individual gradient step ``points along'' the backbone.}
+
+\subsection{Optimizer Integration Resolves It}\label{sec:optimizer-integration}
+
+The backbone is not produced by strong instantaneous gradient alignment.
+Per-batch gradients are nearly isotropic with respect to the backbone direction,
+and their cosine alignment is only marginally above random.  Instead, the
+backbone emerges from the interaction between optimizer dynamics and temporal
+coherence.
+
+Under AdamW~\citep{loshchilov2019decoupled}, the applied parameter update is
+not the raw gradient but a momentum-accumulated, variance-normalized step with
+weight decay.  At step $t$, the first and second moment estimates are
+\begin{align}
+    \mathbf{m}_t &\;=\; \beta_1\,\mathbf{m}_{t-1}
+        \;+\; (1 - \beta_1)\,\mathbf{g}_t, \label{eq:adam-m}\\
+    \mathbf{v}_t &\;=\; \beta_2\,\mathbf{v}_{t-1}
+        \;+\; (1 - \beta_2)\,\mathbf{g}_t^2, \label{eq:adam-v}
+\end{align}
+where $\mathbf{g}_t^2$ denotes element-wise squaring, $\beta_1 = 0.9$, and
+$\beta_2 = 0.95$.  With bias correction ($\hat{\mathbf{m}}_t$,
+$\hat{\mathbf{v}}_t$), the effective parameter update (including decoupled
+weight decay with coefficient $\mu$) is
+\begin{equation}\label{eq:adamw-update}
+    \boxed{
+    \bm{\theta}_{t+1}
+    \;=\; \bm{\theta}_t
+    \;-\; \eta_t \left(
+        \frac{\hat{\mathbf{m}}_t}{\sqrt{\hat{\mathbf{v}}_t} + \epsilon}
+        \;+\; \mu\,\bm{\theta}_t
+    \right),
+    }
+\end{equation}
+where $\eta_t$ is the learning rate at step $t$ and $\epsilon = 10^{-8}$.  The
+net update direction is therefore
+\begin{equation}\label{eq:update-dir}
+    \mathbf{u}_t
+    \;=\;
+    -\frac{\hat{\mathbf{m}}_t}{\sqrt{\hat{\mathbf{v}}_t} + \epsilon}
+    \;-\; \mu\,\bm{\theta}_t.
+\end{equation}
+
+Three properties of this update conspire to create the backbone:
+
+\paragraph{(i) Momentum integration of signed bias.}
+The exponential moving average in \cref{eq:adam-m} acts as a low-pass filter
+with time constant $\tau_m = -1/\ln\beta_1 \approx 9.5$ steps.  Even when the
+instantaneous projection $\inner{\mathbf{g}_t}{\vb}$ is small, if its
+\emph{sign} exhibits a weak but persistent bias across steps, the momentum term
+$\mathbf{m}_t$ integrates this bias.  Concretely, suppose the $i$-th coordinate
+of the gradient has a mean $\mu_i$ and variance $\sigma_i^2$ across time.  Then
+\begin{equation}\label{eq:momentum-snr}
+    \E[(\mathbf{m}_t)_i] \;\approx\; \mu_i,
+    \qquad
+    \Var[(\mathbf{m}_t)_i]
+    \;\approx\; \frac{1 - \beta_1}{1 + \beta_1}\,\sigma_i^2,
+\end{equation}
+so the signal-to-noise ratio of the momentum is
+\begin{equation}\label{eq:snr}
+    \mathrm{SNR}_i
+    \;=\; \frac{\abs{\mu_i}}{\sqrt{\Var[(\mathbf{m}_t)_i]}}
+    \;\approx\; \frac{\abs{\mu_i}}{\sigma_i}
+    \cdot \sqrt{\frac{1 + \beta_1}{1 - \beta_1}}
+    \;=\; \frac{\abs{\mu_i}}{\sigma_i} \cdot \sqrt{19},
+\end{equation}
+amplifying the per-coordinate SNR by a factor of $\sqrt{19} \approx 4.4$.
+Coordinates aligned with the backbone (where $\mu_i$ is nonzero due to the
+persistent LM gradient bias) benefit from this amplification.
+
+\paragraph{(ii) Adaptive normalization suppresses transverse variance.}
+The denominator $\sqrt{\hat{\mathbf{v}}_t} + \epsilon$ in
+\cref{eq:adamw-update} normalizes each coordinate by its root-mean-square
+gradient magnitude.  Coordinates with large but incoherent gradients (high
+$\sigma_i$, low $\mu_i$---typical of transverse directions) are divided by a
+large value, suppressing their contribution to the update.  Coordinates with
+smaller but coherent gradients (moderate $\sigma_i$, nonzero $\mu_i$---typical
+of backbone-aligned directions) are normalized by a smaller value, preserving
+their contribution.  Formally, the effective update along coordinate $i$ scales
+as
+\begin{equation}\label{eq:adaptive-scaling}
+    \frac{(\hat{\mathbf{m}}_t)_i}{\sqrt{(\hat{\mathbf{v}}_t)_i} + \epsilon}
+    \;\approx\; \frac{\mu_i}{\sqrt{\mu_i^2 + \sigma_i^2}}
+    \;=\; \frac{\mathrm{SNR}_i^0}{\sqrt{1 + (\mathrm{SNR}_i^0)^2}},
+\end{equation}
+where $\mathrm{SNR}_i^0 = \mu_i / \sigma_i$.  This is a \emph{sign-preserving
+squashing function}: it amplifies directions with high SNR (backbone) relative
+to those with low SNR (transverse).
+
+\paragraph{(iii) Cumulative coherence vs.\ instantaneous isotropy.}
+In $D = 3.1 \times 10^6$ dimensions, each gradient step has enormous freedom.
+Large transverse components can dominate the norm of each update while still
+cancelling over time if their directions fluctuate.  A much smaller but
+temporally coherent component can therefore dominate \emph{cumulative
+displacement}.  If the per-step transverse displacement has variance $\sigma_\perp^2$
+per dimension and the backbone displacement has magnitude $\delta_{\parallel}$ per step,
+then after $T$ steps the expected squared displacements are
+\begin{equation}\label{eq:random-walk}
+    \norm{\Delta_\parallel}^2 \;=\; (T\,\delta_\parallel)^2
+    \;=\; T^2\,\delta_\parallel^2,
+    \qquad
+    \E[\norm{\Delta_\perp}^2] \;=\; T\,(D-1)\,\sigma_\perp^2,
+\end{equation}
+where the backbone displacement grows \emph{linearly} ($\propto T$) while the
+transverse displacement grows as a random walk ($\propto \sqrt{T}$).  The
+backbone fraction therefore approaches 1 as $T \to \infty$:
+\begin{equation}\label{eq:backbone-dominance}
+    f_{\mathrm{b}}
+    \;\approx\;
+    \frac{T^2\,\delta_\parallel^2}
+         {T^2\,\delta_\parallel^2 + T\,(D-1)\,\sigma_\perp^2}
+    \;\xrightarrow{T \to \infty}\; 1.
+\end{equation}
+This explains why $\rho_1 \approx 0.80$ with only $T = 51$ checkpoints: even a
+weak backbone bias, amplified by momentum and adaptive normalization, is
+sufficient to dominate cumulative drift.
+
+\subsection{Evidence: Update-Direction Alignment}\label{sec:update-alignment}
+
+We compute the 200-step update direction
+\begin{equation}\label{eq:update-200}
+    \mathbf{u}(t) \;=\; \bm{\theta}(t) - \bm{\theta}(t - 200),
+\end{equation}
+which reflects the net effect of all optimizer operations (momentum, adaptive
+learning rates, weight decay, gradient clipping) accumulated over 200 steps.
+We measure the cosine similarity with the backbone:
+\begin{equation}\label{eq:update-cos}
+    C(t) \;=\; \cos\angle\bigl(\mathbf{u}(t),\,\vb\bigr)
+    \;=\; \frac{\inner{\mathbf{u}(t)}{\vb}}{\norm{\mathbf{u}(t)}}.
+\end{equation}
+
+\begin{table}[t]
+\centering
+\caption{Update-direction alignment $\abs{C(t)}$ by training phase
+         (seed~42).  The early-training alignment is 20--30$\times$ above the
+         per-batch gradient noise floor of ${\sim}0.01$.}
+\label{tab:update-alignment}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Phase} & \textbf{Block 0} & \textbf{Blocks 1--7 (median)} &
+\textbf{Interpretation} \\
+\midrule
+Early ($t < 2000$)    & \textbf{0.27} (peak 0.34) & 0.20--0.21
+    & Strong alignment \\
+Mid ($2000 \le t \le 6000$) & 0.054 & 0.054--0.076
+    & Weakened at $\lambda$-transition \\
+Late ($t > 6000$)     & 0.110 & 0.061--0.143
+    & Moderate, sign reversed \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The early-training $\abs{C(t)}$ of 0.20--0.34 (\Cref{tab:update-alignment}) is
+\textbf{20--30$\times$ above} the per-batch gradient noise floor of
+${\sim}0.01$.  This confirms that optimizer integration transforms isotropic
+per-batch gradients into structured, backbone-aligned updates.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/fig_B_alignment_linchpin.pdf}
+    \caption{\textbf{The linchpin: update vs.\ gradient alignment with the
+    backbone (seed~42, Block~0).}  Per-batch gradient alignment
+    $\abs{\cos(\mathbf{g}_t, \vb)}$ (blue circles with error bars) hovers at
+    the noise floor (${\sim}0.005$), while the 200-step update alignment
+    $\abs{\cos(\mathbf{u}_t, \vb)}$ (solid red) reaches 0.20--0.34 in early
+    training.  The ${\sim}40\times$ gap demonstrates that the backbone emerges
+    from optimizer integration, not from instantaneous gradient structure.
+    The signed update alignment (dashed red) reveals a persistent negative
+    bias that flips sign near step~5000.}
+    \label{fig:alignment-linchpin}
+\end{figure}
+
+\paragraph{Sign structure.}
+The signed cosine $C(t)$ is persistently negative throughout early training (the
+optimizer drifts in the $-\vb$ direction), then flips to positive around step
+5000--5200.  Defining the sign-flip step $t^*$ as the first checkpoint where
+$C(t)$ crosses zero:
+
+\begin{table}[h]
+\centering
+\caption{Sign flip in update--backbone alignment.}
+\label{tab:sign-flip}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Seed} & $t^*$ & \textbf{Early $C(t)$ (Blk 0)} & \textbf{Late $C(t)$
+(Blk 0)} \\
+\midrule
+42  & ${\sim}5200$ & $-0.27$ & $+0.11$ \\
+271 & ${\sim}5000$ & $-0.29$ & $+0.07$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The sign reversal coincides with the $\lambda$-transition (step 4000,
+$\lambda: 2 \to 4$) and the onset of oscillation damping.  The reversal is
+present in both seeds (\Cref{tab:sign-flip}).
+
+\subsection{Block Localization: The First Transformer Block Drives the
+Backbone}\label{sec:block-localization}
+
+Which blocks contribute the gradient bias that creates the backbone?  At each
+checkpoint, we compute the signed projection of the combined-loss gradient onto
+the backbone, per block~$\ell$:
+\begin{equation}\label{eq:signed-proj}
+    b_\ell(t) \;=\; \inner{\mathbf{g}_\ell(t)}{\vb^{(\ell)}},
+\end{equation}
+where $\mathbf{g}_\ell(t)$ is the gradient restricted to block~$\ell$ and
+$\vb^{(\ell)}$ is the block-$\ell$ backbone.
+
+\begin{table}[t]
+\centering
+\caption{Mean signed gradient projection $b_\ell(t)$ per block (seed~42,
+         $\lambda = 2.0$ phase).  Block~0 dominates by 3--10$\times$.}
+\label{tab:signed-proj}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+\textbf{Checkpoint} & \textbf{Blk 0} & \textbf{Blk 1} &
+\textbf{Blks 2--5} & \textbf{Blk 6} & \textbf{Blk 7} \\
+\midrule
+Step 200 (init)    & \textbf{0.014} & 0.003 & 0.001 & 0.000 & 0.002 \\
+Step 1800 (peak)   & \textbf{0.019} & 0.001 & 0.001 & 0.003 & 0.004 \\
+Step 2000 (trough) & \textbf{0.029} & 0.001 & 0.001 & 0.005 & 0.005 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Block~0 has 3--10$\times$ larger signed projection than any other block
+(\Cref{tab:signed-proj}).  Blocks 6--7 contribute a secondary positive bias.
+Blocks 1--5 are uniformly near zero.  By late training (step 9600+), all
+projections collapse to ${<}\,0.001$.
+
+The cumulative signed bias, obtained by summing $b_\ell(t)$ across checkpoints,
+\begin{equation}\label{eq:cum-bias}
+    B_\ell \;=\; \sum_{t \in \mathcal{T}} b_\ell(t),
+\end{equation}
+confirms this: Block~0 accumulates monotonically to $B_0 \approx 0.12$, while
+blocks 1--7 remain near 0.01.  The same pattern holds in seed~271.
+
+\textbf{Interpretation.}  Block~0 (the first transformer block) sits directly
+above the token embeddings and is the first to process the LM-relevant token
+representations.  Its attention and MLP weight matrices are the most directly
+constrained by the language modeling objective, giving the LM gradient at this
+level the highest temporal coherence~\citep{saxe2014exact}---it consistently
+pulls these parameters in a stable direction determined by the language
+statistics.
+
+\subsection{Fisher Curvature: The Backbone Stiffens}\label{sec:fisher}
+
+Does the backbone become progressively harder to move along?  We answer this
+using the Fisher information matrix, which characterizes the local curvature of
+the loss landscape.
+
+\begin{definition}[Empirical Fisher and Rayleigh quotient]
+    Given $M$ mini-batch gradients $\{\mathbf{g}_1, \ldots, \mathbf{g}_M\}$
+    stacked into a matrix $\mathbf{G} \in \R^{M \times D}$, the empirical
+    Fisher is
+    \begin{equation}\label{eq:fisher}
+        \hat{\mathbf{F}} \;=\; \frac{1}{M}\,\mathbf{G}^{\!\top}\mathbf{G}
+        \;=\; \frac{1}{M}\sum_{i=1}^{M}
+        \mathbf{g}_i\,\mathbf{g}_i^{\!\top}.
+    \end{equation}
+    The Rayleigh quotient of a unit vector $\mathbf{v}$ with respect to
+    $\hat{\mathbf{F}}$ is
+    \begin{equation}\label{eq:rayleigh}
+        q(\mathbf{v})
+        \;=\; \mathbf{v}^{\!\top}\hat{\mathbf{F}}\,\mathbf{v}
+        \;=\; \frac{1}{M}\,\norm{\mathbf{G}\mathbf{v}}^2
+        \;=\; \frac{1}{M}\sum_{i=1}^{M}
+        \inner{\mathbf{g}_i}{\mathbf{v}}^2.
+    \end{equation}
+\end{definition}
+
+\begin{remark}[Computational trick]
+    Computing \cref{eq:rayleigh} requires only a single matrix-vector product
+    $\mathbf{G}\mathbf{v} \in \R^M$, avoiding construction of the
+    $D \times D$ Fisher matrix.  Since $D \approx 25 \times 10^6$ (full trunk)
+    and $M = 32$, this reduces memory from $O(D^2)$ to $O(MD)$.
+\end{remark}
+
+We define the anisotropy ratio as the Rayleigh quotient along the backbone
+relative to the average over random orthogonal directions:
+
+\begin{definition}[Anisotropy ratio]
+    \begin{equation}\label{eq:anisotropy}
+        \alpha \;=\; \frac{q(\vb)}
+        {\frac{1}{K}\sum_{k=1}^{K} q(\mathbf{w}_k)},
+    \end{equation}
+    where $\{\mathbf{w}_1, \ldots, \mathbf{w}_K\}$ are $K = 10$ random unit
+    vectors orthogonal to $\vb$, generated by Gram--Schmidt
+    orthogonalization of random Gaussian vectors.  $\alpha > 1$ indicates that
+    the loss landscape is stiffer along the backbone than along typical
+    directions.
+\end{definition}
+
+\begin{table}[t]
+\centering
+\caption{Rayleigh quotients and anisotropy (seed~42).  $M = 32$ mini-batches.}
+\label{tab:fisher-s42}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Step} & $q(\vb)$ & $q(\vswitch)$ & $q(\mathbf{v}_{\mathrm{PC2}})$ &
+\textbf{Anisotropy $\alpha$} \\
+\midrule
+200 (init)        & $2.4 \times 10^{-6}$  & $2.9 \times 10^{-6}$
+    & $3.2 \times 10^{-6}$ & $1.3\times$ \\
+1800 (peak)       & $2.5 \times 10^{-6}$  & $2.2 \times 10^{-6}$
+    & $5.2 \times 10^{-6}$ & $1.9\times$ \\
+4800 (transition) & $\mathbf{1.6 \times 10^{-4}}$ & $8.2 \times 10^{-5}$
+    & $4.6 \times 10^{-5}$ & $\mathbf{12.4\times}$ \\
+9600 (late)       & $\mathbf{8.1 \times 10^{-3}}$ & $1.8 \times 10^{-3}$
+    & $7.0 \times 10^{-4}$ & $4.8\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Rayleigh quotients and anisotropy (seed~271).}
+\label{tab:fisher-s271}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Step} & $q(\vb)$ & $q(\vswitch)$ & $q(\mathbf{v}_{\mathrm{PC2}})$ &
+\textbf{Anisotropy $\alpha$} \\
+\midrule
+200 (init)        & $2.0 \times 10^{-6}$ & $1.1 \times 10^{-6}$
+    & $1.4 \times 10^{-6}$ & $1.6\times$ \\
+2200 (peak)       & $1.4 \times 10^{-5}$ & $1.1 \times 10^{-5}$
+    & $2.5 \times 10^{-5}$ & $5.9\times$ \\
+4400 (transition) & $9.5 \times 10^{-5}$ & $5.1 \times 10^{-5}$
+    & $5.2 \times 10^{-5}$ & $\mathbf{40.8\times}$ \\
+9200 (late)       & $1.0 \times 10^{-4}$ & $4.2 \times 10^{-5}$
+    & $7.6 \times 10^{-5}$ & $8.3\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Three observations emerge from \Cref{tab:fisher-s42,tab:fisher-s271}:
+
+\begin{enumerate}
+    \item \textbf{The backbone stiffens progressively.}
+    $q(\vb)$ increases by three orders of magnitude from initialization to late
+    training (seed~42: $2.4 \times 10^{-6} \to 8.1 \times 10^{-3}$),
+    outpacing all other directions.
+
+    \item \textbf{Anisotropy spikes at the $\lambda$-transition.}
+    The moment when the probe loss weight doubles ($\lambda: 2 \to 4$ at step
+    4000) creates a sudden curvature increase along the backbone:
+    $\alpha = 12.4\times$ in seed~42, $40.8\times$ in seed~271.  This is the
+    sharpest curvature event in training.
+
+    \item \textbf{The backbone is \emph{not} the top Fisher eigenvector.}
+    Extracting the leading Fisher eigenvector $\mathbf{u}_1$ via the
+    $M \times M$ Gram matrix trick
+    \begin{equation}\label{eq:gram-trick}
+        (\mathbf{G}\mathbf{G}^{\!\top})\,\mathbf{a}
+        \;=\; \sigma^2\,\mathbf{a}
+        \;\;\Longrightarrow\;\;
+        \mathbf{u}_1 \;=\; \mathbf{G}^{\!\top}\mathbf{a}_1 \;/\;
+        \norm{\mathbf{G}^{\!\top}\mathbf{a}_1},
+    \end{equation}
+    the overlap $\abs{\inner{\mathbf{u}_1}{\vb}} \approx 0.001$---essentially
+    zero.  The backbone captures \emph{cumulative drift}, not the direction of
+    steepest instantaneous curvature.  It is a slow, persistent mode of the
+    optimizer dynamics rather than a mode of the loss landscape Hessian.
+\end{enumerate}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/fig_C_fisher_stiffening.pdf}
+    \caption{\textbf{Fisher curvature along the backbone stiffens over training
+    (seed~42).}  \emph{Left:} Rayleigh quotients $q(\mathbf{v})$ for the
+    backbone (red), switch direction (blue), and random orthogonal directions
+    (grey).  The backbone curvature increases by three orders of magnitude.
+    \emph{Right:} Anisotropy ratio $\alpha = q(\vb) / \E[q(\mathbf{w}_\perp)]$
+    spikes at the $\lambda$-transition (step~4000) before partially relaxing.}
+    \label{fig:fisher-stiffening}
+\end{figure}
+
+
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Optimizer Ablation: SGD-Family Controls}\label{sec:sgd-control}
+
+The preceding sections established that the backbone emerges from optimizer
+integration rather than from instantaneous gradient structure.  A direct test
+of this claim is to replace AdamW with SGD-family optimizers while holding
+everything else constant.
+
+\subsection{SGD-Family Control Experiment}\label{sec:sgd-variants}
+
+We trained the same model under four optimizer configurations, using identical
+data, initialization (seed~42), schedule, and checkpointing protocol
+(\Cref{tab:sgd-configs}).  The SGD variants differ from AdamW only in the
+optimizer; in particular, they lack per-parameter adaptive scaling.
+
+\begin{table}[t]
+\centering
+\caption{Optimizer configurations for the control experiment.  All runs share
+         the same model, data, warmup (1500 steps), cosine schedule (10\%
+         floor), gradient clipping (1.0), and seed.}
+\label{tab:sgd-configs}
+\begin{tabular}{@{}llcccc@{}}
+\toprule
+\textbf{Run} & \textbf{Optimizer} & \textbf{LR} & \textbf{Momentum} &
+\textbf{WD} & \textbf{WD type} \\
+\midrule
+A  & AdamW             & $10^{-3}$ & ($\beta_1{=}0.9$) & 0.5  & decoupled \\
+B  & SGD (no momentum) & $10^{-3}$ & 0.0               & 0.5  & L2 \\
+C  & SGD + momentum    & $10^{-2}$ & 0.9               & 0.05 & L2 \\
+C$'$ & SGD + Nesterov (SGDW) & $10^{-2}$ & 0.9        & 0.5  & decoupled \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Runs~A--C trained for 4000 steps; Run~C$'$ trained for 2000 steps with an
+early-stop decision rule (stop if $\text{val} > 5.1$ and
+$p_{\mathrm{ood}} < 0.02$ at step~2000).  Run~C$'$ implements SGDW---decoupled
+weight decay identical to AdamW's scheme---by setting \texttt{weight\_decay=0}
+in the optimizer and manually applying
+$\bm{\theta} \leftarrow (1 - \eta_t \cdot \text{wd})\,\bm{\theta}$ after each
+gradient step, isolating the effect of weight-decay coupling from adaptive
+scaling.
+
+\begin{table}[t]
+\centering
+\caption{Training outcomes for all optimizer variants (seed~42).  PC1 and
+         $k_{95}$ are from uncentered drift-matrix PCA on the analysis window
+         $[600, 2000]$ with anchor at step~600.}
+\label{tab:sgd-results}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+\textbf{Run} & \textbf{Final val} & \textbf{Best $p_{\mathrm{ood}}$} &
+\textbf{PC1 (\%)} & $k_{95}$ & \textbf{Drift} \\
+\midrule
+A (AdamW)         & 1.59  & 0.433 & 61.5 &  9 & 113.7 \\
+B (SGD no-mom)    & 8.12  & 0.000 & 100.0 & 1 &  40.2 \\
+C (SGD+mom)       & 5.10  & 0.015 & 100.0 & 1 &  54.2 \\
+C$'$ (SGDW+Nesterov)\textsuperscript{$\dagger$}
+                  & 5.25  & 0.013 & ---   & --- & --- \\
+\bottomrule
+\end{tabular}
+\par\smallskip
+{\footnotesize $\dagger$\,Run~C$'$ stopped at step~2000.  At that point,
+C$'$ differed from C by $<$0.03 in val loss and ${\sim}0.001$ in
+$p_{\mathrm{ood}}$; geometry analysis was not pursued.}
+\end{table}
+
+SGD without momentum failed to train (val loss remained $>8$ and probe
+accuracy stayed at chance).  Both momentum-SGD variants (C and~C$'$) trained
+slowly but reached val~$\approx$~5.1, with weak probe OOD signal
+($p_{\mathrm{ood}} \le 0.015$) and no pronounced oscillatory switching.
+Nesterov momentum and decoupled weight decay produced negligible improvements
+over standard momentum-SGD at matched step: at step~2000, val loss differed by
+${<}\,0.03$ and probe OOD accuracy by ${\sim}0.001$
+(\Cref{tab:sgd-results}).
+
+The trajectory geometry tells a starker story.  Over the analysis window
+$[600, 2000]$, AdamW develops a non-degenerate trajectory with
+$\rho_1 \approx 0.62$ and $k_{95} = 9$, while all SGD-family trajectories
+remain nearly colinear ($\rho_1 \approx 1.0$, $k_{95} = 1$).  In particular,
+the difference in geometry is visible before any probe oscillations occur in the
+AdamW run (the first probe peak at step~1800 falls within the analysis
+window), suggesting it reflects baseline optimizer geometry rather than
+oscillation-specific effects.
+
+These results indicate that momentum alone does not produce the multi-dimensional
+slow--fast structure observed under AdamW, and that the key ingredient is
+AdamW's adaptive per-parameter scaling (\Cref{sec:optimizer-integration}).
+
+\subsection{Matched-Loss Geometry}\label{sec:matched-loss}
+
+A potential confound in the above comparison is unequal training progress:
+AdamW reaches val$\,\approx\,1.6$ by step~4000, far ahead of SGD+momentum's
+val$\,\approx\,5.1$.  To control for this, we compare trajectory geometry at
+validation losses around the best regime achieved by momentum-SGD.
+
+\paragraph{Challenge: AdamW has no checkpoint at val$\,\approx\,$5.2.}
+AdamW passes through val$\,\approx\,$5.2 between steps~1 and~200 (val drops
+from 10.8 to 4.3), with no intermediate checkpoints.  We therefore build
+backbone estimates on the earliest available windows
+(\Cref{tab:matched-loss}).
+
+\begin{table}[t]
+\centering
+\caption{Backbone geometry at matched operating regime.  AdamW is analyzed
+         over early windows (val$\,\approx\,$4.3--3.0, already below
+         SGD+mom's best); SGD+mom is analyzed over its plateau
+         (val$\,\approx\,$5.1--5.2).  Drift is
+         $\norm{\bm{\theta}(t_{\mathrm{end}}) - \bm{\theta}(t_{\mathrm{start}})}$.}
+\label{tab:matched-loss}
+\begin{tabular}{@{}llcccr@{}}
+\toprule
+\textbf{Optimizer} & \textbf{Window} & \textbf{PC1 (\%)} & $k_{95}$ &
+$k_{99}$ & \textbf{Drift} \\
+\midrule
+\multicolumn{6}{@{}l}{\emph{At/near val $\approx$ 5.2 (matched regime)}} \\
+\addlinespace[3pt]
+AdamW  & $[1, 200, 400]$\textsuperscript{a}         & 77.4  & 2 & 2 & --- \\
+AdamW  & $[1, 200, 400, 600]$\textsuperscript{a}     & 69.2  & 3 & 3 & 24.9 \\
+AdamW  & $[200, 400, 600]$\textsuperscript{b}         & 81.9  & 2 & 2 & --- \\
+SGD+mom & $[2000, 2200, 2400]$                        & 98.1  & 1 & 2 & 0.26 \\
+SGD+mom & $[1800, \ldots, 2600]$                      & 97.7  & 1 & 2 & 0.60 \\
+\addlinespace[6pt]
+\multicolumn{6}{@{}l}{\emph{Standard analysis window (reference)}} \\
+\addlinespace[3pt]
+AdamW   & $[200, \ldots, 1000]$   & 77.8 & 4 & 8 & 50.7 \\
+AdamW   & $[600, \ldots, 2000]$   & 61.5 & 9 & 19 & 113.7 \\
+SGD+mom & $[600, \ldots, 2000]$   & 100.0 & 1 & 1 & 54.2 \\
+\bottomrule
+\end{tabular}
+\par\smallskip
+{\footnotesize \textsuperscript{a}\,Window spans val from 10.8 to 3.0--3.4;
+passes through val$\,\approx\,$5.2 between steps~1 and~200. \\
+\textsuperscript{b}\,Window starts at val$\,=\,$4.3, already below SGD+mom's
+best; this makes the comparison conservative.}
+\end{table}
+
+Even when AdamW passes through the same loss range early in training, its
+drift is already non-colinear: PC1 explains only 69--82\% of row-normalized
+displacement energy with $k_{95} = 2$--$3$ over windows spanning this regime.
+In contrast, momentum-SGD remains nearly colinear at matched loss
+($\rho_1 \approx 0.98$--$1.00$, $k_{95} = 1$) and exhibits extremely small
+drift ($\norm{\Delta\bm{\theta}} < 1$) over the corresponding plateau windows.
+Decoupled weight decay (SGDW) and Nesterov momentum produce negligible changes
+relative to standard momentum-SGD (\Cref{tab:sgd-results}).
+
+The drift magnitudes are revealing: AdamW traverses 24.9 units of parameter
+drift between steps~1 and~600, while SGD+momentum moves only 0.26 units
+across its entire plateau window $[2000, 2400]$.  The SGD trajectory is not
+merely low-rank; it is nearly \emph{stationary} during its low-loss plateau.
+
+These results indicate that AdamW's adaptive per-parameter scaling induces
+qualitatively richer trajectory geometry than SGD-family variants, even at
+comparable validation loss, supporting an optimizer-specific mechanism for the
+emergence of non-degenerate slow--fast structure.
+
+
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Reheating: Re-Entering the Probe Basin}\label{sec:reheating}
+
+\subsection{Protocol}
+
+From the endpoint of training (step 10{,}000;
+$p_{\mathrm{ood}} \approx 0.16$, deep in the LM-dominant regime), we resume
+training with doubled probe loss weight $\lambda = 4.0$ and a \emph{fresh}
+AdamW optimizer (zeroed momentum and second-moment buffers).  Three learning
+rates are tested: $\eta \in \{10^{-3}, 6 \times 10^{-4}, 3 \times 10^{-4}\}$.
+Each reheating run lasts 2{,}000 steps with a cosine learning rate schedule.
+
+The rationale is straightforward: if the probe attractor still exists in the
+loss landscape, a sufficiently strong gradient signal should be able to push the
+model back into it.  The fresh optimizer ensures that momentum from the original
+training run does not confound the result.
+
+Importantly, reheating primarily perturbs the transverse residual
+$\norm{\mathbf{r}(t)}$ while leaving the accumulated backbone coordinate $a(t)$
+largely unchanged.  This indicates that the slow manifold persists even when the
+model temporarily re-enters the probe regime.
+
+\subsection{Results}
+
+\begin{table}[t]
+\centering
+\caption{Reheating results (seed~42).  The model starts from
+         $p_{\mathrm{ood}} = 0.16$.}
+\label{tab:reheating}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Learning Rate} & \textbf{Peak $p_{\mathrm{ood}}$} &
+\textbf{At Step} & \textbf{First $\ge 0.60$} &
+\textbf{Final (step 2000)} \\
+\midrule
+$10^{-3}$                    & 0.705 & 900  & step 600   & 0.221 \\
+$\mathbf{6 \times 10^{-4}}$  & \textbf{0.782} & \textbf{1000} &
+    step 700 & 0.279 \\
+$3 \times 10^{-4}$           & 0.578 & 1500 & --- & 0.421 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+At the optimal learning rate ($6 \times 10^{-4}$), the model reaches
+$p_{\mathrm{ood}} = 0.782$---exceeding the training-time peak of
+0.777---within 1000 reheating steps (\Cref{tab:reheating}).  The probe basin remains geometrically present in the late-training landscape.
+Reheating reveals that it is not erased but becomes dynamically suppressed by
+backbone stiffening.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/fig_D_reheating.pdf}
+    \caption{\textbf{Reheating trajectories (seed~42).}  Three learning rates
+    are tested from the step-10{,}000 endpoint (grey background: original
+    training).  All three achieve probe re-entry, but the effect is transient:
+    $p_{\mathrm{ood}}$ peaks and then decays as the cosine schedule reduces
+    $\eta_t$.  The optimal LR ($6\times 10^{-4}$, orange) exceeds the
+    original training peak.}
+    \label{fig:reheating}
+\end{figure}
+
+But re-entry is unstable.  After peaking, $p_{\mathrm{ood}}$ decays to 0.28 by
+step 2000.  The probe basin has become a transient saddle: reachable but not
+sustainable under these dynamics.
+
+$\eta = 3 \times 10^{-4}$ is below the threshold for full re-entry---it
+provides insufficient gradient drive to overcome the curvature barrier
+separating the LM and probe basins.
+
+\subsection{Connection to Backbone Stiffening}\label{sec:reheat-stiffening}
+
+The transient nature of reheating is consistent with the backbone stiffening
+documented in \Cref{sec:fisher}.  During training, the backbone direction
+accumulates Fisher curvature.  By step 10{,}000, $q(\vb)$ has increased by
+three orders of magnitude relative to initialization.
+
+Reheating exposes the competition between transverse probe drive and backbone
+curvature.  The backbone coordinate behaves as a stiffened slow variable, while
+transverse modes respond rapidly to increased probe weighting.  Let the component
+of the probe gradient along the backbone be $g_\parallel(t)$ and the curvature
+along the backbone be $\kappa(t) \approx q(\vb)$.  The backbone coordinate
+evolves approximately as
+\begin{equation}\label{eq:reheat-dynamics}
+    \frac{da}{dt}
+    \;\approx\; -\eta_t\,g_\parallel(t)
+    \;-\; \eta_t\,\kappa(t)\,a(t),
+\end{equation}
+where the first term is the probe-driven drift and the second is the
+curvature-mediated restoring force.  When $\kappa$ is large (stiffened backbone),
+only a large $\eta_t$ can overcome it; as the cosine schedule reduces $\eta_t$,
+the restoring force dominates and the model returns to the LM basin.
+
+The sign flip in update--backbone alignment (\Cref{sec:update-alignment})
+provides a complementary perspective.  In early training, the optimizer drifts
+in the $-\vb$ direction (toward the probe basin).  After the sign flip
+($t^* \approx 5000$), the drift reverses---the optimizer moves along $+\vb$,
+away from the probe basin.  Reheating temporarily reverses this via the strong
+probe gradient, but once $\eta_t$ decays, the backbone's natural $+\vb$ drift
+reasserts itself.
+
+\subsection{Two-Seed Comparison}
+
+Seed~271 reheating shows the same qualitative pattern---transient probe
+re-entry followed by decay---though the peak $p_{\mathrm{ood}}$ is lower
+(0.36--0.42 vs.\ 0.78).  Both seeds use identical hyperparameters
+(\Cref{tab:hyperparams}); the quantitative difference likely reflects
+seed-dependent differences in the late-training loss landscape geometry---in
+particular, the depth and width of the probe basin at the reheating start
+point---rather than any difference in the reheating protocol itself.
+
+Thus reheating does not contradict backbone dominance; it demonstrates that
+switching dynamics are transverse excursions around a persistent slow manifold
+shaped by optimizer integration.
+
+
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Switching Lives in the Transverse Subspace}\label{sec:switching}
+
+With the backbone established as the dominant geometric feature, what can we say
+about the oscillatory dynamics?  They occur primarily in the transverse
+subspace.
+
+The switching direction between a peak and adjacent trough of $p_{\mathrm{ood}}$
+is
+\begin{equation}\label{eq:switch-dir}
+    \vswitch \;=\;
+    \frac{\bm{\theta}_{\mathrm{peak}} - \bm{\theta}_{\mathrm{trough}}}
+         {\norm{\bm{\theta}_{\mathrm{peak}} - \bm{\theta}_{\mathrm{trough}}}}.
+\end{equation}
+Its alignment with the backbone is:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lc@{}}
+\toprule
+\textbf{Seed} & $\abs{\inner{\vswitch}{\vb}}$ \textbf{(per-block range)} \\
+\midrule
+42  & 0.20--0.25 \\
+271 & 0.28--0.31 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+We can decompose the switch direction into backbone and transverse components:
+\begin{equation}\label{eq:switch-decomp}
+    \vswitch
+    \;=\; \underbrace{\inner{\vswitch}{\vb}\,\vb}_{\text{backbone component}}
+    \;+\; \underbrace{\vswitch - \inner{\vswitch}{\vb}\,\vb}_{\text{transverse
+    component}}.
+\end{equation}
+The backbone component accounts for $\inner{\vswitch}{\vb}^2 \approx
+0.04$--$0.10$ of the switching direction's variance.  Switching is
+approximately \textbf{80\% transverse} to the backbone.
+
+Furthermore, different switching events use near-orthogonal directions (pairwise
+$\abs{\cos} < 0.08$), and the switching manifold spans at least 10 independent
+dimensions in the 25M-dimensional trunk space.
+
+To quantify how much of the transverse switching direction is captured by the
+leading residual PCs, we project out the backbone component to obtain
+$\vswitch^{\perp} = \vswitch - \inner{\vswitch}{\vb}\,\vb$ (renormalized to
+unit length) and compute the energy fraction captured by PCs 2--6:
+\begin{equation}\label{eq:resid-capture}
+    E_{2{:}6} \;=\; \sum_{k=2}^{6}
+    \inner{\hat{\mathbf{v}}_{\mathrm{sw}}^{\perp}}{\mathbf{v}_k}^2,
+\end{equation}
+where $\mathbf{v}_k$ are the $k$-th right singular vectors from the uncentered
+trajectory PCA.  Per block, $E_{2{:}6}$ ranges from 15--22\% in seed~42 and
+60--67\% in seed~271.  In seed~42, the transverse switching direction is
+largely orthogonal to the low-rank PC subspace, meaning it lives in the
+high-dimensional tail of the trajectory variance.  In seed~271, PCs 2--6
+capture the majority of the transverse switch.  In both cases the switching
+dynamics are distributed across multiple residual dimensions rather than
+concentrated on a single transverse mode.
+
+The picture is: \textbf{the optimizer rides a one-dimensional backbone rail
+while oscillating in a high-dimensional transverse cloud}.
+
+
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Discussion}\label{sec:discussion}
+
+\subsection{Slow--Fast Decomposition of Optimizer Dynamics}
+
+The backbone--transverse decomposition reveals a structural separation in
+transformer training under AdamW.  Long-horizon parameter evolution concentrates
+in a low-dimensional drift direction, while oscillatory objective competition
+unfolds in a high-dimensional transverse subspace.
+
+This separation is not imposed by architecture or by explicit constraints in the
+loss.  It emerges from optimizer dynamics.  Momentum integrates weak but
+temporally coherent gradient bias, and adaptive normalization suppresses
+incoherent variance.  The result is an effective timescale separation: a slow
+cumulative drift manifold and faster transverse fluctuations.
+
+Formally, the dynamics resemble a singularly perturbed system,
+\begin{equation}\label{eq:adiabatic}
+    \frac{d\bm{\theta}}{dt}
+    \;=\; f_{\mathrm{slow}}(\bm{\theta})
+    \;+\; \epsilon^{-1}\,f_{\mathrm{fast}}(\bm{\theta}),
+\end{equation}
+where the slow component corresponds to backbone drift and the fast component
+to transverse switching.  The scale separation parameter reflects the ratio
+between temporal gradient coherence and transverse fluctuation variance.  This
+framing shifts the focus of optimization analysis from static curvature to
+trajectory-level structure.
+
+\subsection{Instantaneous Freedom vs.\ Cumulative Coherence}
+
+The backbone does not imply that gradients are low-dimensional.  At each step,
+gradients remain high-dimensional and largely isotropic relative to the
+backbone.  The distinction lies between instantaneous variability and cumulative
+displacement.
+
+In high dimensions, large transverse components can dominate the norm of
+individual updates yet cancel over time if their directions fluctuate.  A much
+smaller but temporally coherent component can therefore dominate long-horizon
+displacement.  The backbone reflects this integrated coherence rather than a
+restriction of gradient expressivity.
+
+This distinction clarifies why the backbone is nearly orthogonal to top Fisher
+eigenvectors.  It is not the steepest local direction of the loss landscape, but
+the direction in which optimizer integration accumulates persistent bias.
+
+\subsection{Optimizer-Induced Geometry}
+
+The SGD-family controls demonstrate that this structure is not a generic
+property of the objective.  Under SGD with or without momentum, trajectories
+remain nearly colinear and fail to develop multi-dimensional drift structure,
+even at matched validation loss.
+
+Adaptive per-parameter scaling appears to be the key ingredient.  By normalizing
+coordinates according to gradient variance, AdamW selectively amplifies
+temporally coherent components and suppresses incoherent ones.  This produces
+qualitatively richer cumulative geometry than momentum alone.
+
+These results suggest that optimizer choice influences not only convergence
+speed or stability, but the geometric structure of the training trajectory
+itself.
+
+\subsection{Dynamical Consequences: Reheating and Basin Accessibility}
+
+Reheating experiments provide a dynamical probe of this structure.  Transverse
+probe dynamics can be transiently re-excited from late-training checkpoints, but
+accumulated backbone drift remains largely intact.  As curvature along the
+backbone increases, larger learning rates are required to overcome the
+associated restoring force.  When the learning rate decays, the system relaxes
+back toward the backbone-aligned regime.
+
+Thus reheating does not contradict backbone dominance; it reveals that switching
+dynamics correspond to transverse excursions around a persistent slow manifold
+shaped by optimizer integration.
+
+\subsection{Limitations and Scope}
+
+This study uses a 51M-parameter transformer and a synthetic probe objective.
+Whether larger models or natural multi-task settings produce higher-dimensional
+or more distributed backbone structure remains an open question.
+
+The Fisher analysis relies on a low-rank approximation (32 mini-batches), and
+anisotropy ratios may be underestimates.  While results replicate across two
+seeds, broader variation may reveal additional structure.
+
+Despite these limitations, the optimizer ablation and matched-loss comparisons
+indicate that the backbone phenomenon is robust and mechanistically grounded.
+
+
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Methods}\label{sec:methods}
+
+\subsection{Trunk Parameters}
+
+All geometric analyses use trunk-only parameters: weight matrices in attention
+(query, key, value, output projection) and MLP (up-projection, down-projection)
+across all 8 blocks.  This excludes tied embeddings, causal masks, positional
+embeddings, and layer normalization parameters.  Total trunk dimensionality:
+${\sim}25\text{M}$ parameters (${\sim}3.1\text{M}$ per block).
+
+\subsection{Uncentered PCA}\label{sec:methods-pca}
+
+For each transformer block $\ell \in \{0, \ldots, 7\}$, the drift matrix
+$\mathbf{X}^{(\ell)} \in \R^{T \times D_\ell}$ has rows
+\begin{equation}
+    \mathbf{x}^{(\ell)}(t)
+    \;=\; \text{flatten}_\ell\bigl(\bm{\theta}(t)\bigr)
+    \;-\; \text{flatten}_\ell\bigl(\bm{\theta}(0)\bigr).
+\end{equation}
+SVD of $\mathbf{X}^{(\ell)}$ (no mean centering) yields the block backbone
+$\vb^{(\ell)} \in \R^{D_\ell}$ as the first right singular vector.
+
+\subsection{Update-Direction Alignment}
+
+The 200-step update $\mathbf{u}(t) = \bm{\theta}(t) - \bm{\theta}(t - 200)$
+is computed from consecutive checkpoints.  This captures the net effect of
+AdamW (preconditioner, momentum, weight decay, gradient clipping).  Alignment
+is reported as
+$C(t) = \inner{\mathbf{u}(t)}{\vb} / \norm{\mathbf{u}(t)}$.
+
+\subsection{Rayleigh Quotient Computation}\label{sec:methods-rayleigh}
+
+Given a direction $\mathbf{v} \in \R^D$ and a gradient matrix
+$\mathbf{G} \in \R^{M \times D}$:
+\begin{equation}
+    q(\mathbf{v}) \;=\;
+    \frac{1}{M}\,\norm{\mathbf{G}\mathbf{v}}^2
+    \;=\;
+    \frac{1}{M}\sum_{i=1}^{M} \inner{\mathbf{g}_i}{\mathbf{v}}^2.
+\end{equation}
+This requires one matrix--vector product ($O(MD)$ operations, $O(M)$ storage
+for the result), avoiding construction of the $D \times D$ Fisher.  Anisotropy
+uses $K = 10$ random orthogonal directions generated by Gram--Schmidt
+orthogonalization of Gaussian random vectors projected orthogonal to $\vb$.
+
+\subsection{Reheating Protocol}
+
+Resume from step 10{,}000 checkpoint.  Fresh AdamW optimizer (zeroed
+$\mathbf{m}_0$, $\mathbf{v}_0$).  Composite loss weight $\lambda = 4.0$.
+Cosine learning rate schedule over 2{,}000 steps.  Evaluate every 100 steps.
+Three learning rate values: $\{10^{-3}, 6 \times 10^{-4}, 3 \times 10^{-4}\}$.
+
+
+% ══════════════════════════════════════════════════════════════════════════════
+\section*{Acknowledgments}
+
+[To be added.]
+
+
+% ══════════════════════════════════════════════════════════════════════════════
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

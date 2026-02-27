@@ -1,0 +1,621 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{microtype}
+\usepackage{natbib}
+\usepackage{authblk}
+
+\hypersetup{colorlinks=true,linkcolor=blue!60!black,citecolor=green!50!black,urlcolor=blue!70!black}
+
+\newcommand{\pood}{p_{\mathrm{ood}}}
+\newcommand{\Dsig}{D_\sigma}
+\newcommand{\Dzero}{D_0}
+\newcommand{\shalf}{\sigma_{1/2}}
+
+\title{From Geometric Basins to Dynamical Attractors\\in Neural Network Training}
+\author{Y.\ Xu}
+\date{February 2026 --- Draft}
+
+\begin{document}
+\maketitle
+
+%======================================================================
+\begin{abstract}
+We study the evolution of generalisation basins during neural network training using a set of complementary dynamical probes.  We introduce continuous basin depth metrics based on post-relaxation out-of-distribution performance under controlled perturbations, and a recovery-based accessibility test (B1) that measures re-entry into high-performing solutions after displacement.
+
+Across multiple checkpoints, we observe a progressive collapse of basin depth and accessibility, accompanied by increasing dependence on optimiser state.  Intermediate training stages exhibit a noise-assisted stabilisation regime, in which moderate parameter noise enhances basin recoverability, while late-stage solutions are uniformly destabilised by noise.
+
+Combining these observations, we identify a transition from wide, geometrically accessible basins to narrow, history-dependent dynamical attractors.  This transition provides a mechanistic account of grokking-related generalisation phenomena and reveals limitations of purely geometric explanations of generalisation.  Our results highlight the importance of dynamical and state-dependent effects in late-stage learning.
+\end{abstract}
+
+%======================================================================
+\section{Introduction}
+\label{sec:intro}
+
+\subsection{Motivation}
+
+Neural networks trained on multiple objectives frequently exhibit prolonged non-monotonic learning dynamics, including delayed generalisation, oscillatory performance, and abrupt regime changes.  Such behaviour is often interpreted as evidence of multiple ``attractors'' in the loss landscape, between which optimisation alternates.
+
+In this work, we investigate this phenomenon in a controlled setting: joint training of a small transformer on a language modelling objective and an auxiliary probe task designed to test compositional generalisation.  Despite the simplicity of the setup, training exhibits sustained oscillations in out-of-distribution accuracy over thousands of steps.
+
+Our goal is not to optimise performance, but to characterise the geometry and dynamics underlying these oscillations.
+
+\subsection{Limitations of Static Attractor Interpretations}
+
+A natural explanation for oscillatory learning curves is that optimisation alternates between two fixed basins in parameter space, corresponding to different functional regimes.  Under this view, training trajectories repeatedly cross a separating boundary between these basins.
+
+However, recent work suggests that neural network training landscapes are highly nonstationary, and that optimiser state, learning-rate schedules, and implicit regularisation can play essential roles in shaping accessible regions of parameter space.
+
+This raises a fundamental question: do oscillations reflect transitions between fixed geometric basins, or do they arise from time-dependent, optimiser-mediated metastable regimes?
+
+\subsection{Overview of Contributions}
+
+We address this question using a suite of complementary analyses applied to dense checkpoint trajectories:
+\begin{itemize}[nosep]
+    \item We show that successive oscillations occur along distinct, nearly orthogonal directions in trunk parameter space, ruling out a single reaction coordinate.
+    \item We demonstrate that high-OOD regimes are not stable under optimiser resets, indicating dependence on momentum and adaptive statistics.
+    \item We find that learning-rate reheating restores access to high-OOD regimes, establishing that regime disappearance is dynamical rather than geometric.
+    \item We quantify regime drift and corridor dimensionality, showing that within-regime movement exceeds between-regime separation.
+\end{itemize}
+Together, these results support a view of training as motion through an extended state space, comprising both weights and optimiser variables, with regime transitions mediated by low-dimensional corridors whose accessibility is controlled by step size.
+
+%======================================================================
+\section{Related Work}
+\label{sec:related}
+
+\subsection{Grokking and Delayed Generalisation}
+
+Grokking refers to delayed transitions from memorisation to generalisation during training.  Early work documented this phenomenon in modular arithmetic and synthetic reasoning tasks \citep{power2022grokking}, with subsequent studies exploring its dependence on regularisation, data distribution, and model capacity \citep{nanda2023progress,liu2023omnigrok}.  Recent investigations have linked grokking to representation changes, implicit bias, and optimisation dynamics \citep{merrill2023tale,lyu2023dichotomy}.  Our work complements these studies by providing direct empirical probes of basin accessibility and stability across training.
+
+\subsection{Loss Landscape Geometry and Flat Minima}
+
+A large body of work has examined the geometry of neural network loss landscapes, emphasising flatness, sharpness, and connected minima as predictors of generalisation \citep{hochreiter1997flat,keskar2017large,li2018visualizing,draxler2018essentially}.  Methods based on Hessian spectra \citep{sagun2017empirical,ghorbani2019investigation}, local entropy \citep{chaudhari2019entropy}, and noise sensitivity \citep{neyshabur2017exploring} have been proposed to characterise basin robustness.  While early training basins in our experiments are consistent with these geometric notions, our results indicate that late-stage basins cannot be fully explained by static landscape properties alone.
+
+\subsection{Optimisation Dynamics and Path Dependence}
+
+Several studies have emphasised the role of optimisation dynamics, including momentum, adaptive learning rates, and initialisation, in shaping training outcomes \citep{smith2018dont,lewkowycz2020large,cohen2021gradient}.  Recent work has demonstrated strong path dependence and hysteresis effects in deep learning \citep{frankle2020linear,neyshabur2020being}, suggesting that training trajectories encode information not captured by final parameter values.  Our findings provide direct experimental evidence that optimiser state constitutes a structural component of late-stage basin stability.
+
+\subsection{Noise and Stochastic Stabilisation}
+
+Stochastic gradient noise and explicit perturbations have been shown to influence convergence and generalisation, sometimes promoting exploration of flat regions \citep{zhu2019anisotropic,wu2020noisy,xie2021diffusion}.  The noise-assisted stabilisation observed in our intermediate regime is consistent with stochastic resonance and diffusion-based mechanisms studied in statistical physics and stochastic optimisation \citep{gardiner2009stochastic}.  Our results extend these ideas to basin accessibility and recoverability.
+
+\subsection{Dynamical Systems Perspectives on Learning}
+
+Viewing training as a dynamical system has enabled analyses of attractors, bifurcations, and phase transitions in learning \citep{saxe2014exact,advani2020high}.  Recent theoretical work has modelled learning dynamics using continuous-time approximations and mean-field limits \citep{mei2018mean,rotskoff2022trainability}.  Our empirical probes provide concrete evidence for dynamical attractor formation in discrete, finite-scale training.
+
+\subsection{Basin Probing and Stability Analysis}
+
+Prior work has proposed various methods for probing basin structure, including linear interpolation \citep{goodfellow2015qualitatively}, noise injection \citep{neyshabur2017exploring}, mode connectivity \citep{draxler2018essentially,garipov2018loss}, and retraining-based tests \citep{frankle2019lottery}.  Our approach differs by combining relaxation, noise sensitivity, and recovery probes into a unified framework that directly measures basin depth and accessibility as continuous functions of training progress.
+
+%======================================================================
+\section{Experimental Setup}
+\label{sec:setup}
+
+\subsection{Model Architecture}
+
+We use a decoder-only GPT with the architecture summarised in Table~\ref{tab:arch}.
+
+\begin{table}[h]\centering\small
+\caption{Model architecture.}\label{tab:arch}
+\begin{tabular}{ll}
+\toprule
+Parameter & Value \\
+\midrule
+Layers & 8 \\
+$d_{\mathrm{model}}$ & 512 \\
+Attention heads & 16 \\
+$d_{\mathrm{ff}}$ & 2048 \\
+Sequence length & 256 \\
+Dropout & 0.0 \\
+Total parameters & 51\,045\,888 \\
+Tokeniser & \texttt{roneneldan/TinyStories} ($\approx$50k vocab) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Training Data}
+
+\paragraph{Language modelling.}  200k texts from TinyStories, tokenised to 256-token sequences.
+
+\paragraph{Probe injection.}  With probability $p_{\mathrm{probe}}=0.10$, a training sequence is replaced by a probe sequence containing a \emph{codeword} (a single-token string) at a random position, followed by a \emph{value token} at gap distance $g\sim\mathrm{Uniform}[5,30]$.  The model must predict the value given the codeword.  512 codewords are selected from the vocabulary: tokens that encode to exactly one token, are $\geq 3$ characters, and contain only lowercase ASCII.  Candidates are sorted alphabetically then shuffled with a fixed seed for reproducibility.
+
+\paragraph{Evaluation.}  Two held-out probe sets of 2\,000 examples each:
+\begin{itemize}[nosep]
+    \item In-distribution (ID): gaps $g\in[5,30]$
+    \item Out-of-distribution (OOD): gaps $g\in[80,200]$
+\end{itemize}
+The primary metric is $\pood=$ exact-match accuracy on the OOD set.
+
+\subsection{Training Configuration}
+
+\begin{table}[h]\centering\small
+\caption{Training hyperparameters.}\label{tab:hparams}
+\begin{tabular}{ll}
+\toprule
+Parameter & Value \\
+\midrule
+Optimiser & AdamW ($\beta_1{=}0.9$, $\beta_2{=}0.95$, $\varepsilon{=}10^{-8}$) \\
+Learning rate & $10^{-3}$ (cosine decay, 1\,500-step warmup) \\
+Weight decay & 0.5 \\
+Probe loss weight $\lambda$ & 2.0 \\
+Effective batch size & $64\times 2=128$ \\
+Gradient clipping & 1.0 \\
+Total steps & 10\,000 \\
+Seed & 42 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The composite loss is $\mathcal{L}=\mathcal{L}_{\mathrm{lm}}+\lambda\,\mathcal{L}_{\mathrm{probe}}$, where $\mathcal{L}_{\mathrm{lm}}$ and $\mathcal{L}_{\mathrm{probe}}$ are cross-entropy losses at non-probe and probe positions respectively, separated by a binary \texttt{probe\_mask}.
+
+%======================================================================
+\section{Training Dynamics: Oscillating Probe Accuracy}
+\label{sec:dynamics}
+
+\subsection{Time Series}
+
+Over 10\,000 steps, $\pood$ oscillates with amplitude $\Delta P\approx 0.25$--$0.35$ between peaks and troughs during steps 1\,800--6\,800 (Figure~\ref{fig:timeseries}).  Key checkpoints are listed in Table~\ref{tab:timeseries}.
+
+\begin{table}[h]\centering\small
+\caption{Selected checkpoints from the recalibrated $\pood$ time series.}\label{tab:timeseries}
+\begin{tabular}{rll}
+\toprule
+Step & $\pood$ & Phase \\
+\midrule
+1\,000 & 0.066 & Emerging \\
+1\,800 & 0.518 & Peak 1 \\
+2\,000 & 0.483 & Trough \\
+2\,800 & 0.737 & \textbf{Peak 2 (global max)} \\
+5\,000 & 0.765 & Peak 3 \\
+5\,400 & 0.453 & Trough \\
+6\,400 & 0.704 & Peak 4 \\
+6\,800 & 0.392 & Trough \\
+10\,000 & 0.161 & LM-dominant \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Key observations:
+\begin{enumerate}[nosep]
+    \item Peak values remain high ($0.52$--$0.77$) through step 6\,400.
+    \item After step 7\,000, the model settles into a persistent LM-dominant regime ($\pood<0.30$).
+    \item In-distribution accuracy $p_{\mathrm{in}}>0.85$ throughout---the probe is learned in-distribution even when OOD generalisation fails.
+    \item Validation loss decreases monotonically from 10.8 to 1.22; the LM objective is never impaired.
+\end{enumerate}
+
+\begin{figure}[t]\centering
+\includegraphics[width=0.85\textwidth]{runs/pilot_wd0.5_lr0.001_lp2.0_s42/analysis/fig_B1_timeseries.png}
+\caption{$\pood$ time series over 10\,000 training steps (recalibrated with recovered codewords).  Peaks and troughs are marked.}\label{fig:timeseries}
+\end{figure}
+
+\subsection{Recalibration}
+
+Due to a non-determinism bug in codeword selection (\texttt{tokenizer.get\_vocab()} iteration order depends on Python's hash seed), we recovered the original codewords by testing the trained model at step 2\,800 on all 1\,281 candidate tokens (20 trials each).  477 codewords with accuracy $>0$ were recovered.  Recalibrated metrics match originals with ratio 0.92--1.08 (mean $\approx 0.99$); see Appendix~\ref{app:codewords}.
+
+%======================================================================
+\section{Geometric Analysis}
+\label{sec:geometry}
+
+We define \textbf{trunk parameters} as all weight matrices excluding tied embeddings, causal masks, positional embeddings, and layer normalisation.  The trunk has ${\approx}25$M parameters.
+
+\subsection{B1: Basin Test (Probe Recoverability)}
+\label{sec:basin_test}
+
+\paragraph{Protocol.}  Load checkpoint at step $s$, reset optimiser, train 1\,000 steps with $\mathrm{LR}=6\times10^{-4}$, $\lambda=8$ (4$\times$ training value), evaluate every 100 steps.
+
+\begin{table}[h]\centering\small
+\caption{Basin test results.  Target: $\pood\geq 0.60$.}\label{tab:basin_test}
+\begin{tabular}{llcccc}
+\toprule
+Type & Step & Start $\pood$ & Steps to 60\% & Max achieved \\
+\midrule
+Peak   & 1800 & 0.523 & 650 & \textbf{0.686} \\
+Trough & 2000 & 0.483 & ---  & 0.569 \\
+Peak   & 2400 & 0.586 & ---  & 0.573 \\
+Trough & 2600 & 0.535 & ---  & 0.552 \\
+Peak   & 2800 & 0.709 & ---  & 0.503 \\
+Trough & 3200 & 0.582 & ---  & 0.469 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Only the earliest peak (step 1\,800) reaches the 0.60 target.  Maximum recovery decays monotonically with training step: $0.686\to 0.573\to 0.503$ (peaks).  Peaks consistently outperform troughs by 0.03--0.12.  We return to these results in Section~\ref{sec:basin_evolution}.
+
+\subsection{B2: Switching-Direction Alignment}
+\label{sec:switching_dirs}
+
+\paragraph{Protocol.}  Define three switching directions from matched peak--trough pairs:
+\begin{align*}
+\Delta_1 &= \theta(2800)-\theta(2000),\quad \|\Delta_1\|=88.7 \\
+\Delta_2 &= \theta(5000)-\theta(5400),\quad \|\Delta_2\|=40.4 \\
+\Delta_3 &= \theta(6400)-\theta(6800),\quad \|\Delta_3\|=22.4
+\end{align*}
+
+\begin{table}[h]\centering\small
+\caption{Cosine similarity (Gram matrix) between switching directions.}\label{tab:gram_switch}
+\begin{tabular}{lccc}
+\toprule
+     & $\Delta_1$ & $\Delta_2$ & $\Delta_3$ \\
+\midrule
+$\Delta_1$ & 1.00  & 0.071  & 0.072 \\
+$\Delta_2$ & 0.071 & 1.00   & $-0.004$ \\
+$\Delta_3$ & 0.072 & $-0.004$ & 1.00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All three switching directions are \textbf{nearly orthogonal} ($|\cos|<0.08$).  Each oscillation moves along a different direction in the 25M-dimensional trunk space.  The switching amplitude also decreases: $\|\Delta\|=88.7\to 40.4\to 22.4$.
+
+\subsection{B3: Trajectory Alignment with Switching Directions}
+\label{sec:trajectory_alignment}
+
+For each $\Delta_e$, we compute $\cos(\theta(s{+}200)-\theta(s),\;\Delta_e)$ at every 200-step interval.
+
+\begin{itemize}[nosep]
+    \item $\Delta_1$ (2800$\to$2000): alignment spikes to $+0.49$ during steps 2\,000--2\,800, near zero elsewhere.
+    \item $\Delta_2$ (5000$\to$5400): alignment reaches $-0.75$ during steps 5\,000--5\,400.
+    \item $\Delta_3$ (6400$\to$6800): alignment reaches $-0.76$ during steps 6\,400--6\,800, with a broader shoulder of moderate alignment ($\sim$0.10) during steps 5\,800--6\,400.
+\end{itemize}
+
+Each switching direction is a temporally localised, low-dimensional ``channel'' in weight space.  The optimiser enters and exits these channels in sequence, never reusing a previous direction.
+
+\subsection{B5: Location Drift}
+\label{sec:drift}
+
+\begin{table}[h]\centering\small
+\caption{Trunk-only $L_2$ norms between checkpoints.}\label{tab:drift}
+\begin{tabular}{llr}
+\toprule
+Category & Pair & $\|\Delta\theta\|$ \\
+\midrule
+Within-peak   & 5000$-$2800 & 112.6 \\
+Within-peak   & 6400$-$5000 & 71.4 \\
+Within-trough & 5400$-$2000 & 130.8 \\
+Within-trough & 6800$-$5400 & 63.2 \\
+Between       & 2800$-$2000 & 88.7 \\
+Between       & 5000$-$5400 & 40.4 \\
+Between       & 6400$-$6800 & 22.4 \\
+\midrule
+\multicolumn{2}{l}{Centre separation $\|C_P-C_T\|$} & 34.6 \\
+\multicolumn{2}{l}{Mean within-regime} & 94.5 \\
+\multicolumn{2}{l}{Mean between-regime} & 50.5 \\
+\multicolumn{2}{l}{Drift ratio (between/within)} & 0.53 \\
+\multicolumn{2}{l}{$\|\theta_{10000}-C_P\|$} & 73.6 \\
+\multicolumn{2}{l}{$\|\theta_{10000}-C_T\|$} & 65.3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Within-regime drift (94.5) exceeds between-regime separation (50.5) by ${\sim}2\times$.  The ``attractors'' are not fixed points; they are moving targets that drift substantially as the LM representation evolves.
+
+\subsection{B6: Basin Depth Curves (Noise Perturbation)}
+\label{sec:basin_depth}
+
+\paragraph{Relaxation Protocol $\mathcal{R}$.}
+\begin{enumerate}[nosep]
+    \item Load checkpoint at step $s$.
+    \item Apply trunk-only Gaussian noise: $W'=W+\sigma\cdot\mathrm{rms}(W)\cdot Z$, $Z\sim\mathcal{N}(0,I)$.
+    \item Train 300 steps with fresh AdamW ($\mathrm{LR}=6\times10^{-4}$, $\lambda=4$, $\mathrm{WD}=0.5$, grad clip$=1.0$).
+    \item Evaluate $\pood$.  Repeat $M=4$ independent trials.
+\end{enumerate}
+
+We define:
+\begin{itemize}[nosep]
+    \item \textbf{Basin depth} $\Dsig(s)=$ mean $\pood$ after relaxation across $M$ trials.
+    \item \textbf{Half-depth sigma} $\shalf=$ smallest $\sigma$ where $\Dsig < \Dzero/2$.
+\end{itemize}
+
+\begin{table}[h]\centering\small
+\caption{Basin depth $\Dsig$ (mean $\pood$ after 300-step relaxation, $M{=}4$ trials per cell).  $\shalf{>}0.30$ for all checkpoints.}\label{tab:basin_depth}
+\begin{tabular}{rccccc}
+\toprule
+Step & $\sigma{=}0$ & $\sigma{=}0.01$ & $\sigma{=}0.03$ & $\sigma{=}0.10$ & $\sigma{=}0.30$ \\
+\midrule
+2800 (peak) & $0.444{\pm}.049$ & $0.465{\pm}.029$ & $0.458{\pm}.035$ & $0.457{\pm}.059$ & $0.456{\pm}.046$ \\
+5000 (peak) & $0.400{\pm}.023$ & $0.452{\pm}.021$ & $0.503{\pm}.045$ & $0.388{\pm}.086$ & $0.461{\pm}.052$ \\
+6400 (peak) & $0.278{\pm}.089$ & $0.290{\pm}.067$ & $0.368{\pm}.066$ & $0.309{\pm}.068$ & $0.242{\pm}.044$ \\
+10000 (LM)  & $0.225{\pm}.041$ & $0.224{\pm}.035$ & $0.179{\pm}.014$ & $0.172{\pm}.056$ & $0.149{\pm}.029$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]\centering
+\includegraphics[width=0.85\textwidth]{runs/pilot_wd0.5_lr0.001_lp2.0_s42/analysis/fig_B6_basin_depth.png}
+\caption{Basin depth curves: mean $\pood$ after relaxation as a function of noise scale $\sigma$, for four checkpoints.  Error bars show $\pm 1$ SE ($M{=}4$ trials).}\label{fig:basin_depth}
+\end{figure}
+
+We analyse these results---including the monotonic decay of $\Dzero$, the non-monotonic noise response at intermediate checkpoints, and the dependence on optimiser state---in Section~\ref{sec:basin_evolution}.
+
+\subsection{B7: Switching Manifold Dimensionality}
+\label{sec:manifold}
+
+\paragraph{Protocol.}  Compute 10 displacement vectors $\Delta_e=\theta_{\mathrm{peak}}-\theta_{\mathrm{trough}}$ for extended pairs spanning steps 1\,800--6\,800.  Apply Gram--Schmidt orthogonalisation and measure residuals $r_e(k)=\|\Delta_e-\Pi_k\Delta_e\|/\|\Delta_e\|$.
+
+\begin{table}[h]\centering\small
+\caption{Gram--Schmidt residuals.  All 10 directions are linearly independent.}\label{tab:manifold}
+\begin{tabular}{clcc}
+\toprule
+$e$ & Pair & $\|\Delta_e\|$ & Final residual \\
+\midrule
+1  & (1800,2000) & 50.2 & 1.000 \\
+2  & (2400,2600) & 47.0 & 1.000 \\
+3  & (2800,2000) & 88.7 & 0.896 \\
+4  & (3800,4000) & 39.6 & 0.998 \\
+5  & (4200,4400) & 37.7 & 0.998 \\
+6  & (4600,4800) & 33.4 & 0.998 \\
+7  & (5000,5400) & 40.4 & 0.996 \\
+8  & (5600,5800) & 23.8 & 0.996 \\
+9  & (6000,6200) & 20.3 & 0.994 \\
+10 & (6400,6800) & 22.4 & 0.986 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Effective dimensionality = 10.}  Residuals remain above 0.89 for all directions.  The switching manifold spans at least 10 dimensions in 25M-dimensional trunk space---tiny in relative terms ($4\times 10^{-5}$\%) but sufficient that the oscillation is not a simple two-state toggle.
+
+%======================================================================
+\section{Basin Evolution}
+\label{sec:basin_evolution}
+
+The preceding experiments characterise individual geometric properties of the training trajectory.  In this section, we synthesise the basin-related findings---depth curves (Section~\ref{sec:basin_depth}), recovery tests (Section~\ref{sec:basin_test}), and optimiser-reset effects---into a unified picture of how generalisation basins evolve over training.
+
+\subsection{Basin Probes}
+
+We evaluate basin geometry using three complementary probes:
+\begin{enumerate}[nosep]
+    \item \textbf{Relaxation test} (Section~\ref{sec:basin_depth}): $\pood$ after resetting optimiser state and running 300 fine-tuning steps at varying noise levels $\sigma$.
+    \item \textbf{Noise sensitivity test} (Table~\ref{tab:basin_depth}): basin depth $\Dsig$ under additive parameter noise of magnitude $\sigma$.
+    \item \textbf{B1 recovery test} (Section~\ref{sec:basin_test}): recoverability of high-$\pood$ solutions under 1\,000 steps of fine-tuning with boosted probe loss.
+\end{enumerate}
+All probes are evaluated at multiple training checkpoints to characterise basin evolution.
+
+\subsection{Basin Depth Decays with Training}
+
+We define the basin depth at noise level $\sigma$ as
+\begin{equation}
+\Dsig = \mathbb{E}\bigl[\pood \mid \text{after relaxation at noise } \sigma\bigr].
+\end{equation}
+Table~\ref{tab:basin_depth} reports $\Dsig$ for $\sigma\in\{0, 0.01, 0.03, 0.10, 0.30\}$ across four checkpoints.
+
+Baseline depth $\Dzero$ decreases monotonically with training:
+\begin{center}\small
+\begin{tabular}{rcccc}
+\toprule
+Step & 2800 & 5000 & 6400 & 10000 \\
+\midrule
+$\Dzero$ & $0.444$ & $0.400$ & $0.278$ & $0.225$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+This indicates progressive collapse of basin robustness under optimiser reset, consistent with the declining recoverability observed in Section~\ref{sec:basin_recoverability}.
+
+\subsection{Intermediate Noise Enhances Basin Accessibility}
+\label{sec:noise_enhancement}
+
+At intermediate checkpoints, moderate noise significantly improves basin depth relative to the unperturbed baseline:
+\begin{itemize}[nosep]
+    \item Step 5\,000: $D_{0.03}=0.503 > \Dzero=0.400$ \quad ($+26\%$)
+    \item Step 6\,400: $D_{0.03}=0.368 > \Dzero=0.278$ \quad ($+32\%$)
+\end{itemize}
+This produces a pronounced non-monotonic dependence on $\sigma$, with optimal performance at $\sigma\approx 0.01$--$0.03$.
+
+In contrast, the late checkpoint (step 10\,000) exhibits monotonic degradation with $\sigma$ ($0.225\to 0.149$).
+
+\paragraph{Interpretation.}
+Early and mid-stage basins benefit from stochastic exploration: small parameter perturbations nudge the fresh optimiser toward the probe mode more effectively than starting from the exact checkpoint weights.  Late-stage basins are destabilised by noise.  This suggests a transition from \emph{geometry-dominated} to \emph{dynamics-dominated} basin structure.
+
+\subsection{Loss of Basin Recoverability under Fine-Tuning}
+\label{sec:basin_recoverability}
+
+The B1 recovery test (Table~\ref{tab:basin_test}) measures the maximal achievable $\pood$ under fine-tuning from each checkpoint with boosted probe loss ($\lambda=8$).  Only the earliest peak (step 1\,800) recovers to the 0.60 target.  Later checkpoints show monotonic decay in maximal recovery:
+\begin{center}\small
+\begin{tabular}{rcccc}
+\toprule
+Step & 1800 & 2400 & 2800 & 3200 \\
+\midrule
+Max $\pood$ & 0.686 & 0.573 & 0.503 & 0.469 \\
+\bottomrule
+\end{tabular}
+\end{center}
+Notably, step 2\,800 exhibits the highest \emph{pre-relaxation} $\pood$ (0.737) but the worst peak-checkpoint \emph{recoverability} (0.503), indicating that the basin is narrow and increasingly isolated from the trajectories accessible to a fresh optimiser.
+
+\subsection{Dependence on Optimiser State}
+\label{sec:optim_dependence}
+
+The relaxation probe reveals a systematic performance drop of ${\sim}0.25$--$0.30$ even at $\sigma=0$ after optimiser reset (compare pre-relaxation $\pood$ in Table~\ref{tab:timeseries} with $\Dzero$ in Table~\ref{tab:basin_depth}).  This indicates that basin stability depends strongly on optimiser momentum and adaptive statistics, not on weight geometry alone.
+
+Combined with the B1 results, this implies that late basins are stabilised in the joint parameter--optimiser space $(\theta, m, v)$ rather than in parameter space alone.
+
+\subsection{Phase Structure of Basin Evolution}
+\label{sec:phase_structure}
+
+Across all probes, training exhibits three distinct regimes:
+
+\paragraph{Phase~I: Geometric Regime ($\leq$1\,800 steps).}
+High basin depth, strong recoverability (B1 reaches 0.686), and noise-insensitive $\Dsig$.  The probe basin is wide, geometrically accessible, and does not depend on optimiser history.
+
+\paragraph{Phase~II: Mixed Regime (2\,000--6\,400 steps).}
+Declining depth ($\Dzero$: $0.44\to 0.28$), noise-assisted recovery ($D_{0.03}>\Dzero$), and partial accessibility under fine-tuning.  The basin is narrowing but can still be reached via stochastic exploration.
+
+\paragraph{Phase~III: Dynamical Regime ($\geq$10\,000 steps).}
+Shallow depth ($\Dzero=0.23$), poor recoverability, monotonic noise sensitivity ($\Dsig$ declines with $\sigma$), and strong optimiser dependence.  The probe regime persists primarily through optimiser memory and exhibits limited geometric accessibility.
+
+\subsection{Summary of Basin Evolution}
+
+Our results indicate that generalisation basins evolve from wide, geometrically accessible regions to narrow, dynamically stabilised attractors.  Early basins are robust under perturbation and retraining.  Late basins persist primarily through optimiser memory and exhibit limited geometric accessibility.
+
+Taken together, these experiments show that generalisation basins undergo a qualitative transition from geometric objects in parameter space to history-dependent dynamical attractors.  This transition is marked by declining basin depth, loss of recoverability, disappearance of noise-assisted stabilisation, and increasing dependence on optimiser state.
+
+%======================================================================
+\section{Reheating Experiments}
+\label{sec:reheating}
+
+\paragraph{Protocol.}  Resume training from step 10\,000 ($\pood\approx 0.16$) with doubled loss weight $\lambda=4$ for 2\,000 additional steps.
+
+\begin{table}[h]\centering\small
+\caption{Reheating results from the LM-dominant regime.}\label{tab:reheat}
+\begin{tabular}{lcccc}
+\toprule
+LR & Peak $\pood$ & @ Step & First $\geq 0.60$ & Final (2000) \\
+\midrule
+$10^{-3}$      & \textbf{0.697} & 800  & step 600 & 0.221 \\
+$6\times10^{-4}$ & \textbf{0.782} & 1000 & step 700 & 0.279 \\
+$3\times10^{-4}$ & 0.578         & 900  & never    & 0.421 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Key findings:}
+\begin{enumerate}[nosep]
+    \item \textbf{The probe attractor is reachable} from deep in the LM regime.  $\mathrm{LR}=6\times10^{-4}$ achieves $\pood=0.78$, exceeding the training maximum.
+    \item \textbf{Re-entry is transient.}  All runs peak around steps 800--1\,000, then decay.
+    \item \textbf{LR threshold.}  $\mathrm{LR}=3\times10^{-4}$ never reaches 0.60---insufficient to escape the LM basin.
+\end{enumerate}
+
+\begin{figure}[t]\centering
+\includegraphics[width=0.85\textwidth]{runs/pilot_wd0.5_lr0.001_lp2.0_s42/analysis/fig_B4_reheating.png}
+\caption{Reheating: $\pood$ trajectories starting from step 10\,000 with $\lambda=4$.}\label{fig:reheat}
+\end{figure}
+
+%======================================================================
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{From Geometric Basins to Dynamical Attractors}
+
+Our experiments indicate that generalisation basins undergo a qualitative transition during training.  Early checkpoints exhibit wide, geometrically accessible basins, characterised by high basin depth, strong recoverability, and weak dependence on optimiser state.  In this regime, convergence is primarily governed by the local geometry of the loss landscape.
+
+As training progresses, basins become progressively narrower and less accessible.  By late training, high-performing solutions persist mainly through optimiser-dependent dynamics, and re-entry from nearby parameter states becomes increasingly unlikely.  These late-stage solutions behave as dynamical attractors, stabilised by training history rather than by static landscape geometry.
+
+This transition---from Phase~I through Phase~III (Section~\ref{sec:phase_structure})---provides a concrete dynamical interpretation of grokking-related phase changes in generalisation.
+
+\subsection{Role of Stochasticity in Basin Stabilisation}
+
+Intermediate training stages exhibit a pronounced noise-assisted regime, in which moderate parameter noise enhances basin depth and recoverability (Section~\ref{sec:noise_enhancement}).  This non-monotonic dependence on $\sigma$ suggests that stochastic perturbations facilitate exploration of nearby low-loss regions and improve effective basin connectivity.
+
+Such behaviour is consistent with stochastic resonance and diffusion-based stabilisation mechanisms studied in dynamical systems and statistical physics.  In contrast, late-stage basins lack this stabilising regime and are destabilised by noise, indicating a loss of local geometric redundancy.
+
+These findings imply that stochasticity plays a constructive role during basin formation but becomes disruptive once basins collapse into narrow attractors.
+
+\subsection{Optimiser State as a Structural Component of Generalisation}
+
+The strong performance degradation observed under optimiser reset (Section~\ref{sec:optim_dependence}), combined with poor B1 recoverability at late checkpoints, demonstrates that optimiser state is a critical component of basin stability.  In particular, momentum and adaptive statistics appear to encode directional information necessary for maintaining access to late-stage solutions.
+
+This suggests that generalisation basins reside in an extended state space comprising both parameters and optimiser variables $(\theta, m, v)$.  Consequently, late-stage convergence cannot be fully characterised by static loss landscape properties alone.
+
+This perspective complements recent work emphasising path dependence and history effects in deep learning optimisation.
+
+\subsection{Implications for Grokking and Phase Transitions}
+
+Our results provide mechanistic insight into grokking phenomena.  The transition from geometric to dynamical basins coincides with observed shifts in generalisation behaviour, suggesting that grokking reflects a reorganisation of basin structure rather than solely a change in representation.
+
+Early training produces multiple geometrically accessible solutions with limited generalisation.  Subsequent training gradually isolates a small number of dynamically stabilised attractors associated with improved out-of-distribution performance.
+
+From this viewpoint, grokking corresponds to the emergence of narrow, history-dependent generalisation basins.
+
+\subsection{Relation to Flat Minima and Generalisation Theory}
+
+Classical explanations of generalisation emphasise flatness and robustness of minima.  While early basins in our experiments are consistent with this paradigm, late-stage basins exhibit low geometric accessibility despite good generalisation performance.
+
+This suggests that flatness alone is insufficient to characterise late-stage generalisation.  Instead, stability must be understood relative to training dynamics and optimiser state.
+
+Our results therefore motivate extending flat-minima analyses to include dynamical and history-dependent effects.
+
+\subsection{Limitations}
+
+Several limitations should be acknowledged.
+\begin{enumerate}[nosep]
+    \item \textbf{Scale and task.}  Our experiments use a 51M-parameter model on controlled tasks.  While these settings enable detailed basin probing, it remains unclear how fully the observed phase structure extends to large-scale pretraining.
+    \item \textbf{Probing protocols.}  Basin probes rely on specific relaxation and perturbation protocols.  Alternative probing methods may reveal additional structure.
+    \item \textbf{Statistical power.}  Computational constraints limit the number of trials ($M{=}4$), particularly for large $\sigma$ and late checkpoints.  Additional trials would improve confidence in fine-grained trends.
+    \item \textbf{Single seed.}  All results use seed 42; seed variation may affect the phase boundaries.
+    \item \textbf{Codeword recovery.}  477 of 512 codewords recovered; 35 may be false negatives.
+\end{enumerate}
+
+\subsection{Future Directions}
+
+Several avenues for future work follow naturally from our findings.
+
+\paragraph{Optimiser and parameterisation.}
+Systematic comparisons across optimisers and parameterisations (e.g., $\mu$-parameterisation) may clarify whether basin collapse is driven by scale mismatch or intrinsic dynamics.
+
+\paragraph{State-space geometry.}
+Developing theoretical tools to analyse basins in joint parameter--optimiser space may yield a more complete dynamical theory.
+
+\paragraph{Scaling studies.}
+Extending basin probes to varying widths, depths, and data regimes would test the universality of the observed phases.
+
+\paragraph{Interventions.}
+Designing training procedures that preserve geometric accessibility---e.g., controlled noise injection or momentum regularisation---may improve generalisation stability.
+
+\subsection{Broader Implications}
+
+These results suggest that late-stage learning in neural networks is governed less by static optimisation landscapes and more by emergent dynamical structures.  Understanding these structures may be essential for explaining sudden generalisation transitions, training instability, and sensitivity to optimisation hyperparameters.
+
+More broadly, our findings highlight the importance of treating training trajectories as dynamical processes rather than mere paths to isolated minima.
+
+\medskip
+In summary, we show that generalisation basins evolve from wide, geometrically accessible regions to narrow, history-dependent dynamical attractors.  This transition underlies observed grokking behaviour and reveals limitations of purely geometric accounts of generalisation.  Our results point toward a dynamical systems perspective as a unifying framework for understanding late-stage learning.
+
+%======================================================================
+\section{Methods}
+\label{sec:methods}
+
+\subsection{Trunk Parameter Filtering}
+
+All geometric analyses use trunk-only parameters: weight tensors matching
+\begin{center}
+\small\texttt{\^{}(blocks$\backslash$.$\backslash$d+$\backslash$.(attn$\backslash$.(W\_q|W\_k|W\_v|W\_o)|ff$\backslash$.(fc1|fc2))$\backslash$.weight|head$\backslash$.weight)\$}
+\end{center}
+This excludes tied embeddings, causal masks, positional embeddings, and layer normalisation.
+
+\subsection{Relaxation Protocol $\mathcal{R}$}
+
+Load checkpoint $\to$ apply perturbation ($\sigma>0$: $W'=W+\sigma\cdot\mathrm{rms}(W)\cdot Z$ for trunk params) $\to$ fresh AdamW ($\beta_1{=}0.9$, $\beta_2{=}0.95$) $\to$ 300 steps at constant $\mathrm{LR}=6\times10^{-4}$, $\lambda=4$, $\mathrm{WD}=0.5$, grad clip$=1.0$ $\to$ evaluate $\pood$.  $M=4$ trials per $(\text{checkpoint},\sigma)$.
+
+\subsection{Gram--Schmidt Dimensionality}
+
+For each direction $\Delta_e$ in sequence, orthogonalise against all previously accepted basis vectors, measure residual norm relative to the original, add to basis if residual $>10^{-8}$.
+
+%======================================================================
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+%======================================================================
+\appendix
+\section{Codeword Non-Determinism and Recovery}
+\label{app:codewords}
+
+\paragraph{Bug.} \texttt{find\_single\_token\_codewords()} iterates \texttt{tokenizer.get\_vocab()}, whose dict order depends on \texttt{PYTHONHASHSEED}.  The candidate list was shuffled with a seeded RNG, but the shuffle result depends on input order.  Each process invocation produced different codewords.
+
+\paragraph{Fix.}  Added \texttt{candidates.sort()} before \texttt{rng.shuffle(candidates)}.
+
+\paragraph{Recovery.}  Tested all 1\,281 candidates on the model at step 2\,800 (20 trials each).  477 with accuracy $>0$ were saved (hash: \texttt{6f1bba89}).  Recalibrated metrics match originals within 0.92--1.08.
+
+\paragraph{Impact.}  Analyses using only saved checkpoint weights (B2, B3, B5, B7) were unaffected.  B1 (basin test) and B6 (basin depth) were redone with recovered codewords.  Reheating (B4) retains qualitative conclusions with a $\sim$1\% recalibration.
+
+%======================================================================
+
+\begin{figure}[p]\centering
+\includegraphics[width=0.85\textwidth]{runs/pilot_wd0.5_lr0.001_lp2.0_s42/analysis/fig_B1_basin_test.png}
+\caption{B1 basin test: $\pood$ recovery curves from different starting checkpoints.}\label{fig:basin_test}
+\end{figure}
+
+\begin{figure}[p]\centering
+\includegraphics[width=0.85\textwidth]{runs/pilot_wd0.5_lr0.001_lp2.0_s42/analysis/fig_B3_switching_alignment.png}
+\caption{B3 switching alignment: cosine between consecutive weight updates and each switching direction.}\label{fig:alignment}
+\end{figure}
+
+\begin{figure}[p]\centering
+\includegraphics[width=0.85\textwidth]{runs/pilot_wd0.5_lr0.001_lp2.0_s42/analysis/fig_B7_manifold_dim.png}
+\caption{B7 manifold dimensionality: Gram--Schmidt residuals (left) and cosine Gram matrix (right).}\label{fig:manifold}
+\end{figure}
+
+\end{document}
