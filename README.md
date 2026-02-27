@@ -188,22 +188,15 @@ Requires Python 3.10+ and PyTorch 2.0+. Runs on CUDA, MPS (Apple Silicon), or CP
 
 ## Reproducing Results
 
-```bash
-# Train seed 42 (AdamW, 10k steps)
-python training/pilot.py --seed 42
-
-# SGD control experiments
-python experiments/sgd_controls/sgd_control.py
-python experiments/sgd_controls/sgd_nesterov_run.py
-
-# Backbone analysis
-python analysis/backbone/trajectory_pca.py
-python analysis/fisher/rayleigh_quotients.py
-python experiments/sgd_controls/sgd_control_analysis.py
-
-# Generate paper figures
-python figures/make_paper_figures.py
-```
+| Task | Command |
+|------|---------|
+| Train baseline AdamW | `python training/pilot.py --seed 42 --wd 0.5 --lr 0.001 --steps 10000` |
+| Run second-moment sweep | `bash experiments/beta_sweep/run_beta2_overnight.sh` |
+| SGD control experiments | `python experiments/sgd_controls/sgd_control.py` |
+| Backbone PCA | `python analysis/backbone/trajectory_pca.py --run-dir runs/pilot_wd0.5_lr0.001_lp2.0_s42` |
+| Basin tests (B1-B7) | `python analysis/basin/B1_basin_test.py --run-dir runs/pilot_wd0.5_lr0.001_lp2.0_s42` |
+| Fisher / Rayleigh quotients | `python analysis/fisher/rayleigh_quotients.py --run-dir runs/pilot_wd0.5_lr0.001_lp2.0_s42` |
+| Make paper figures | `python figures/make_paper_figures.py` |
 
 ## Compiling the Paper
 
