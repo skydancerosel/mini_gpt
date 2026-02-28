@@ -36,21 +36,21 @@ Oscillations in probe performance live in directions orthogonal to the backbone:
 
 ### 3. Second-Moment Memory Controls Geometric Coherence
 
-Ablation across varying second-moment averaging coefficients:
+Ablation across varying second-moment averaging coefficients (seed 42):
 
-| Config | Final Val Loss | Best p_ood | PC1 (%) | k95 | Drift |
-|--------|---------------|------------|---------|-----|-------|
-| Baseline | 1.21 | 0.939 | 68.4 | 6 | 108.5 |
-| High avg. | 1.16 | 0.951 | 68.1 | 6 | 106.1 |
-| Moderate | 1.37 | 0.814 | 66.3 | 7 | 113.1 |
-| Low | 1.47 | 0.682 | 63.4 | 8 | 128.1 |
-| None | diverged | 0.005 | 51.6 | 7 | 211,694 |
+| Config | beta2 | Final Val Loss | Best p_ood | PC1 (%) | k95 | Drift |
+|--------|-------|---------------|------------|---------|-----|-------|
+| High avg. | 0.99 | 1.16 | 0.951 | 68.1 | 6 | 106.1 |
+| Baseline | 0.95 | 1.21 | 0.939 | 68.4 | 6 | 108.5 |
+| Moderate | 0.90 | 1.37 | 0.814 | 66.3 | 7 | 113.1 |
+| Low | 0.80 | 1.47 | 0.682 | 63.4 | 8 | 128.1 |
+| None | 0.0 | diverged | 0.005 | 51.6 | 7 | 211,694 |
 
 Less second-moment averaging increases trajectory dimensionality, weakens update-backbone alignment, and destabilizes attractor switching. Removing it entirely causes divergence.
 
 ### 4. SGD Controls
 
-Compared against SGD (no momentum), SGD + momentum, and SGD + Nesterov + decoupled weight decay, with analysis window [600, 2000]:
+Compared against SGD (no momentum), SGD + momentum, and SGD + Nesterov + decoupled weight decay (seed 42, analysis window [600, 2000]):
 
 | Optimizer | PC1 (%) | k95 | Drift | Best p_ood |
 |-----------|---------|-----|-------|------------|
@@ -63,7 +63,9 @@ At matched validation loss (~5.1-5.2), AdamW trajectories are already non-coline
 
 ### 5. Reheating
 
-Reheating from step 10,000 (p_ood = 0.16) with doubled probe weight and fresh optimizer:
+Reheating from step 10,000 with doubled probe weight (lambda=4.0) and fresh optimizer.
+
+**Seed 42** (starting p_ood = 0.16):
 
 | Learning Rate | Peak p_ood | At Step | Final (step 2000) |
 |--------------|------------|---------|-------------------|
@@ -71,7 +73,15 @@ Reheating from step 10,000 (p_ood = 0.16) with doubled probe weight and fresh op
 | **6e-4** | **0.782** | **1000** | **0.279** |
 | 3e-4 | 0.578 | 1500 | 0.421 |
 
-Peak probe recovery depends on learning rate, transverse curvature, and optimizer geometry. Re-entry is transient: transverse probe dynamics are re-excited, but accumulated backbone drift remains intact.
+**Seed 271** (same protocol, lower baseline):
+
+| Learning Rate | Peak p_ood | At Step | Final (step 2000) |
+|--------------|------------|---------|-------------------|
+| 1e-3 | 0.361 | 800 | 0.267 |
+| 6e-4 | 0.331 | 1800 | 0.284 |
+| **3e-4** | **0.417** | **2000** | **0.417** |
+
+Both seeds show the same qualitative pattern — transient probe re-entry followed by decay — though seed 271 peaks lower (0.36-0.42 vs 0.78). Re-entry is transient: transverse probe dynamics are re-excited, but accumulated backbone drift remains intact.
 
 ---
 
