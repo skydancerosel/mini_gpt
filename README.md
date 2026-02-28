@@ -34,19 +34,19 @@ Oscillations in probe performance live in directions orthogonal to the backbone:
 - Residual PCs (PC2-PC6) capture switching dynamics, with corr(||r||, p_ood) = -0.91.
 - Fisher curvature along the backbone increases by 3 orders of magnitude during training (backbone stiffening).
 
-### 3. Second-Moment Memory Controls Geometric Coherence
+### 3. β₂ Controls Backbone Geometry (Mechanism Validation)
 
-Ablation across varying second-moment averaging coefficients (seed 42):
+If the backbone emerges from optimizer-integrated gradient history, then altering AdamW's second-moment normalization (β₂) should systematically change trajectory geometry. We vary β₂ while holding all other hyperparameters fixed (4,000 steps, seed 42):
 
-| Config | beta2 | Final Val Loss | Best p_ood | PC1 (%) | k95 | Drift |
-|--------|-------|---------------|------------|---------|-----|-------|
-| High avg. | 0.99 | 1.16 | 0.951 | 68.1 | 6 | 106.1 |
-| Baseline | 0.95 | 1.21 | 0.939 | 68.4 | 6 | 108.5 |
-| Moderate | 0.90 | 1.37 | 0.814 | 66.3 | 7 | 113.1 |
-| Low | 0.80 | 1.47 | 0.682 | 63.4 | 8 | 128.1 |
-| None | 0.0 | diverged | 0.005 | 51.6 | 7 | 211,694 |
+| β₂ | Val Loss | Best p_ood | PC1 (%) | k95 | Drift | \|cos(u, v_b)\| | Interference |
+|------|----------|------------|---------|-----|-------|-----------------|--------------|
+| 0.99 | 1.16 | 0.951 | 68.1 | 6 | 106 | 0.226 | 0.022 |
+| 0.95 | 1.21 | 0.939 | 68.4 | 6 | 109 | 0.225 | 0.011 |
+| 0.90 | 1.37 | 0.814 | 66.3 | 7 | 113 | 0.220 | 0.040 |
+| 0.80 | 1.47 | 0.682 | 63.4 | 8 | 128 | 0.214 | 0.048 |
+| 0.0 | diverged | 0.005 | 51.6 | 7 | 211,694 | 0.099 | 0.273 |
 
-Less second-moment averaging increases trajectory dimensionality, weakens update-backbone alignment, and destabilizes attractor switching. Removing it entirely causes divergence.
+Reducing β₂ smoothly degrades backbone dominance (PC1: 68→63%), increases effective dimensionality (k95: 6→8), weakens update-backbone alignment, and amplifies gradient interference. β₂=0 diverges catastrophically. This confirms that second-moment normalization is the specific mechanism constraining optimization into low-dimensional cumulative drift.
 
 ### 4. SGD Controls
 
@@ -61,27 +61,31 @@ Compared against SGD (no momentum), SGD + momentum, and SGD + Nesterov + decoupl
 
 At matched validation loss (~5.1-5.2), AdamW trajectories are already non-colinear (PC1 ~ 69-82%, k95 = 2-3) while SGD+momentum remains nearly colinear (PC1 ~ 98%, k95 = 1) with drift < 1 unit. Only AdamW develops coherent multi-dimensional backbone structure.
 
-### 5. Reheating
+### 5. Reheating and Basin Depth
 
-Reheating from step 10,000 with doubled probe weight (lambda=4.0) and fresh optimizer.
+Reheating from checkpoints with doubled probe weight (λ=4.0) and fresh optimizer. Re-entry gain G = max p_ood(t) − p_ood(t₀) measures attractor depth.
 
-**Seed 42** (starting p_ood = 0.16):
+**10K runs** (from step 10,000, cosine LR, warmup 200):
 
-| Learning Rate | Peak p_ood | At Step | Final (step 2000) |
-|--------------|------------|---------|-------------------|
-| 1e-3 | 0.705 | 900 | 0.221 |
-| **6e-4** | **0.782** | **1000** | **0.279** |
-| 3e-4 | 0.578 | 1500 | 0.421 |
+| Seed | LR | p₀ | Peak p_ood | G |
+|------|--------|-------|------------|--------|
+| 42 | 6e-4 | 0.077 | **0.782** | **+0.705** |
+| 42 | 1e-3 | 0.073 | 0.697 | +0.625 |
+| 42 | 3e-4 | 0.072 | 0.578 | +0.506 |
+| 271 | 6e-4 | 0.197 | **0.689** | **+0.492** |
+| 271 | 1e-3 | 0.197 | 0.421 | +0.224 |
+| 271 | 3e-4 | 0.196 | 0.402 | +0.206 |
 
-**Seed 271** (same protocol, lower baseline):
+**β₂ ablation reheating** (from 4K training, cosine LR, warmup 200):
 
-| Learning Rate | Peak p_ood | At Step | Final (step 2000) |
-|--------------|------------|---------|-------------------|
-| 1e-3 | 0.361 | 800 | 0.267 |
-| 6e-4 | 0.331 | 1800 | 0.284 |
-| **3e-4** | **0.417** | **2000** | **0.417** |
+| β₂ | Ckpt | Best LR | Peak p_ood | G |
+|------|------|---------|------------|--------|
+| 0.95 | 2000 | any | 0.672 | +0.000 |
+| 0.95 | 4000 | 6e-4 | 0.421 | +0.200 |
+| 0.80 | 2000 | 3e-4 | 0.191 | +0.002 |
+| 0.80 | 4000 | 6e-4 | 0.131 | +0.006 |
 
-Both seeds show the same qualitative pattern — transient probe re-entry followed by decay — though seed 271 peaks lower (0.36-0.42 vs 0.78). Re-entry is transient: transverse probe dynamics are re-excited, but accumulated backbone drift remains intact.
+**Key patterns:** At 10K, the probe attractor is dormant but deep (G up to +0.71). Lower β₂ produces dramatically shallower basins (G≈0 for β₂=0.80 vs G=+0.20 for β₂=0.95 at ckpt 4000). Re-entry is transient: transverse probe dynamics are re-excited, but accumulated backbone drift remains intact. LR=6e-4 consistently gives the best recovery.
 
 ---
 
@@ -161,6 +165,8 @@ mini_gpt/
 │   │
 │   ├── beta_sweep/                         # Second-moment memory experiments
 │   │   ├── run_beta2_overnight.sh          #   5-phase pipeline
+│   │   ├── beta2_analysis.py               #   Per-run + cross-run + reheat analysis
+│   │   ├── beta2_reheating.py              #   Fast reheating (loads dataset once)
 │   │   └── Overnight.md                    #   Experiment notes
 │   │
 │   └── reheating/                          # Reheating experiments
@@ -201,7 +207,8 @@ Requires Python 3.10+ and PyTorch 2.0+. Runs on CUDA, MPS (Apple Silicon), or CP
 | Task | Command |
 |------|---------|
 | Train baseline AdamW | `python training/pilot.py --seed 42 --wd 0.5 --lr 0.001 --steps 10000` |
-| Run second-moment sweep | `bash experiments/beta_sweep/run_beta2_overnight.sh` |
+| Run β₂ ablation (training + analysis + reheating) | `bash experiments/beta_sweep/run_beta2_overnight.sh` |
+| β₂ reheating only | `python experiments/beta_sweep/beta2_reheating.py --base-dir runs/beta2_ablation/` |
 | SGD control experiments | `python experiments/sgd_controls/sgd_control.py` |
 | Backbone PCA | `python analysis/backbone/trajectory_pca.py --run-dir runs/pilot_wd0.5_lr0.001_lp2.0_s42` |
 | Basin tests (B1-B7) | `python analysis/basin/B1_basin_test.py --run-dir runs/pilot_wd0.5_lr0.001_lp2.0_s42` |
