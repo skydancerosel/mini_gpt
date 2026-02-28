@@ -1,0 +1,111 @@
+\section{Discussion}
+
+
+\subsection{Empirical Decomposition of Training Dynamics}
+
+We presented an empirical decomposition of transformer training under AdamW into two geometric components:
+
+\begin{enumerate}
+\item A dominant cumulative drift direction (the rolling backbone), defined operationally via uncentered trajectory PCA in rolling windows.
+\item Transverse residual dynamics associated with probe switching.
+\end{enumerate}
+
+This decomposition is descriptive rather than assumed. It follows directly from measured drift geometry. Across two seeds and 10{,}000 training steps, the backbone is:
+
+\begin{itemize}
+\item \textbf{Low-dimensional:} PC1 captures 71--72\% of row-normalized variance over the full trajectory, and 60--81\% in phase-specific windows (\S4.1, \S4.3).
+\item \textbf{Locally smooth:} Adjacent-window cosine $\rho(t) > 0.7$ everywhere, with mean $\approx 0.80$ (\S4.2).
+\item \textbf{Globally reoriented:} Early--late phase cosine $|\langle v_E, v_L \rangle| = 0.32$ ($\approx 71°$ rotation), with curvature concentrated in the 4k--6k transition region (\S4.3--4.4).
+\end{itemize}
+
+The quantitative consistency across seeds (all reported values agree to within 1--2\% between seed 42 and seed 271) indicates that these geometric features are robust properties of the training dynamics rather than seed-specific artifacts.
+
+
+\subsection{Instantaneous Gradients vs Accumulated Updates}
+
+Per-batch gradients exhibit near-noise-floor projection onto the rolling backbone direction ($|\cos| \approx 0.008$--$0.012$). In contrast, 200-step accumulated updates align strongly with it ($|\cos| \approx 0.15$--$0.32$ in early training; \S4.8). This $20$--$30\times$ gap demonstrates that backbone dominance is not explained by instantaneous gradient alignment. It arises at the level of optimizer-integrated updates.
+
+We do not claim a formal dynamical-systems separation. We only observe that accumulated update geometry differs qualitatively from per-step gradient geometry, and that this difference is controlled by optimizer configuration (\S4.7).
+
+
+\subsection{Optimizer Dependence}
+
+Optimizer ablations provide causal support for the claim that backbone geometry is optimizer-induced:
+
+\begin{itemize}
+\item \textbf{$\beta_2$ ablation:} Reducing $\beta_2$ from 0.95 to 0.0 degrades PC1 concentration from 68\% to 52\%, halves update--backbone alignment (0.23 $\to$ 0.10), explodes drift magnitude by $\sim$2000$\times$, and collapses probe accuracy from 0.94 to 0.005 (\S4.7, Table~4).
+\item \textbf{SGD control:} SGD-family variants fail to reproduce the same learning outcome. AdamW with the same architecture achieves PC1 $\approx 81\%$ on the same trajectory interval.
+\item \textbf{Monotonic degradation:} Across $\beta_2 \in \{0.99, 0.95, 0.90, 0.80, 0.0\}$, backbone concentration, update alignment, and best probe accuracy all degrade monotonically.
+\end{itemize}
+
+These effects occur under matched architecture, data, and schedules, isolating optimizer configuration as the primary variable. We therefore conclude that backbone geometry is optimizer-induced rather than a generic property of the loss landscape.
+
+
+\subsection{Phase Reorientation Under Objective Reweighting}
+
+The $\lambda$-switch at step 4000 ($\lambda: 2 \to 4$) coincides with a measurable dynamical phase transition:
+
+\begin{itemize}
+\item \textbf{Backbone rotation:} The slow direction reorients by $\approx 71°$, passing through a geometric dead zone ($A_E \approx 0.02$, $A_L \approx 0.16$) near step 3500 (\S4.4).
+\item \textbf{Power-law regime change:} Backbone growth exponent drops from $\gamma_a = +1.74$ (pre-switch) to $-0.08$ (post-switch); residual exponent drops from $\gamma_r = +0.84$ to $-0.31$ (\S4.5).
+\item \textbf{Sign reversal:} Update--backbone alignment flips from $\cos \approx -0.32$ to $+0.11$ near step 5100 (\S4.8).
+\item \textbf{Fisher anisotropy spike:} Backbone Rayleigh quotient increases $\sim$64$\times$ from step 1800 to 4800, with anisotropy peaking at $12.4\times$ (\S4.9).
+\item \textbf{Correlation flip:} $\mathrm{corr}(p_{\mathrm{ood}}, \|r\|)$ reverses from $+0.85$ (0--4k) to $-0.76$ (6k--10k) (\S4.6).
+\end{itemize}
+
+We do not claim that curvature causes rotation. Rather, we document that objective reweighting produces correlated, measurable changes across five independent geometric diagnostics. The rolling tangent remains locally smooth throughout ($\rho > 0.7$); the phase transition reflects gradual global reorientation concentrated in the 4k--6k region.
+
+
+\subsection{Reheating as a Geometric Probe}
+
+Reheating experiments reveal that:
+
+\begin{itemize}
+\item Probe performance can be transiently restored from late checkpoints.
+\item Re-entry magnitude depends on learning rate and $\beta_2$.
+\item Accumulated backbone drift remains largely unchanged during reheating.
+\end{itemize}
+
+These findings are consistent with the backbone--residual decomposition: reheating perturbs transverse components while leaving dominant cumulative drift largely intact. The correlation flip documented in \S4.6 provides additional context: after step 6000, residual re-growth is associated with \emph{declining} probe accuracy ($r \approx -0.76$--$-0.79$), suggesting that late residual dynamics drive the model away from the probe solution rather than toward it.
+
+
+\subsection{The Three Dynamical Phases}
+
+The power-law analysis (\S4.5) reveals that training decomposes into three phases with distinct geometric signatures:
+
+\begin{enumerate}
+\item \textbf{Acceleration (0--2k):} Both backbone and residual grow rapidly ($a \sim t^{2.1}$, $r \sim t^{1.2}$). The trajectory explores broadly, with productive residual energy ($\mathrm{corr}(p_{\mathrm{ood}}, \|r\|) \approx +0.8$).
+
+\item \textbf{Consolidation (2k--6k):} Backbone growth slows ($\gamma_a: 2.1 \to 0.67 \to 0.15$) while the residual contracts ($\gamma_r \approx -0.4$ to $-1.4$). The $\lambda$-switch at step 4000 sharpens the contraction. The model consolidates along the slow direction.
+
+\item \textbf{Plateau (6k--10k):} The backbone retreats ($\gamma_a \approx -0.19$), the residual re-grows ($\gamma_r \approx +0.34$), and probe accuracy declines. The drift direction becomes orthogonal to both phase backbones ($A_E \approx A_L \approx 0.02$--$0.18$). The late-phase rank-1 concentration (PC1 $\approx 81\%$) indicates tight low-rank drift, but in a direction no longer aligned with either learning phase.
+\end{enumerate}
+
+These three phases are not assumed \emph{a priori}; they emerge from piecewise power-law fits with high $R^2$ values ($> 0.85$, most $> 0.97$) and are consistent across both seeds.
+
+
+\subsection{Scope and Limitations}
+
+This study uses a 51M-parameter transformer and a synthetic probe objective. The backbone phenomenon may scale differently in larger models or natural multi-objective settings.
+
+The Fisher analysis relies on mini-batch approximations ($n = 32$ batches). Reported anisotropy ratios may underestimate full curvature structure.
+
+The rotation curve analysis uses $W = 10$ checkpoint windows ($\approx$2000 steps). Smaller windows would provide finer temporal resolution but lower statistical stability; the choice of $W$ affects the absolute values of $\rho(t)$ but not the qualitative pattern (dip location, phase handoff structure).
+
+All main results replicate across two seeds with quantitative agreement typically within 1--2\%. Broader seed variation, dataset variation, and scaling to larger models remain future work.
+
+
+\subsection{Summary}
+
+This work provides a trajectory-level characterization of transformer training under AdamW:
+
+\begin{itemize}
+\item Cumulative drift concentrates in a locally smooth, globally evolving direction (PC1 $\approx 71\%$; early--late rotation $\approx 71°$).
+\item Instantaneous gradients do not explain this direction; accumulated optimizer updates do ($20$--$30\times$ alignment gap).
+\item Optimizer configuration controls drift geometry ($\beta_2$ ablation: PC1 68\% $\to$ 52\%, alignment 0.23 $\to$ 0.10).
+\item Objective reweighting reorients the dominant drift direction, with curvature concentrated in a $\sim$2000-step transition zone.
+\item Backbone and residual dynamics obey distinct power-law regimes that change sharply at the $\lambda$-switch ($\gamma_a: +1.74 \to -0.08$; $\gamma_r: +0.84 \to -0.31$).
+\item Residual geometry correlates with task performance, with the sign of the correlation reversing across training phases ($+0.85$ early, $-0.79$ late).
+\end{itemize}
+
+These findings shift attention from instantaneous gradient geometry to cumulative trajectory structure as a measurable, optimizer-dependent, and objective-sensitive feature of training dynamics.

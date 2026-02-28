@@ -1,0 +1,276 @@
+\section{Mechanism: Optimizer-Induced Slow Manifold and Controlled Rotation}
+
+\subsection{Global Backbone Direction and Spectral Concentration}
+
+We begin with the global structure of the cumulative parameter trajectory. For each seed, we flatten all trunk parameters (attention QKV/output projections and MLP weights; $D = 25{,}165{,}824$ parameters) at each checkpoint $t \in \{200, 400, \ldots, 10000\}$, compute drifts $\Delta\theta_t = \theta_t - \theta_1$, row-normalize, and extract the top right singular vector $v_b$ via SVD.
+
+Across the full 10k trajectory, PC1 captures a dominant fraction of row-normalized variance:
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+ & Seed 42 & Seed 271 \\
+\midrule
+PC1 (row-normalized) & 71.4\% & 71.7\% \\
+PC2 (row-normalized) & 12.1\% & 11.8\% \\
+PC1 (raw, unnormalized) & 79.1\% & 79.3\% \\
+Trunk dimension $D$ & \multicolumn{2}{c}{25,165,824} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The trajectory is dominated by a single direction, but as we show below, this direction is not static.
+
+
+\subsection{Local Tangent Stability}
+
+Let $v_{\mathrm{roll}}(t)$ denote the first principal component of the row-normalized, uncentered drift matrix computed in a rolling window of $W = 10$ checkpoints ($\approx$2000 steps) centered at step $t$. To measure local curvature, define adjacent-window alignment:
+%
+\[
+\rho(t) = \bigl|\langle v_{\mathrm{roll}}(t),\; v_{\mathrm{roll}}(t+\Delta) \rangle\bigr|.
+\]
+
+Across the full training run (both seeds):
+%
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+ & Seed 42 & Seed 271 \\
+\midrule
+$\mathbb{E}[\rho(t)]$ & 0.800 & 0.793 \\
+$\max\;\rho(t)$ & 0.936 & 0.938 \\
+$\min\;\rho(t)$ & 0.749 & 0.702 \\
+Step at $\min\;\rho$ & $\approx$5000 & $\approx$5000 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Adjacent windows maintain high alignment ($\rho > 0.7$ everywhere), confirming that the backbone tangent varies smoothly. However, $\rho$ is not uniformly close to 1: the dip near step 5000 signals a region of concentrated curvature.
+
+
+\subsection{Cumulative Turning and Global Reorientation}
+
+Local stability does not imply global rigidity. Small rotations accumulate. To quantify long-horizon reorientation, we compute phase-level backbones via global SVD over disjoint intervals:
+%
+\begin{itemize}
+\item $v_E$: PC1 over the early interval (steps 1--4000, relative to $\theta_1$),
+\item $v_L$: PC1 over the late interval (steps 4000--10000, relative to $\theta_{4000}$).
+\end{itemize}
+
+These phase backbones are substantially misaligned:
+%
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+ & Seed 42 & Seed 271 \\
+\midrule
+PC1 (early, 0--4k) & 60.0\% & 59.2\% \\
+PC1 (late, 4k--10k) & 81.3\% & 81.7\% \\
+$|\langle v_E, v_L \rangle|$ & 0.323 & 0.323 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The cosine similarity of 0.32 corresponds to an angle of $\approx 71°$. Thus:
+%
+\begin{itemize}
+\item \textbf{Locally:} the backbone tangent is smooth.
+\item \textbf{Globally:} the slow direction rotates by $\approx 71°$ over the full run.
+\end{itemize}
+%
+The cumulative trajectory lies on a smooth but substantially curved one-dimensional manifold in parameter space.
+
+Notably, the late phase has \emph{stronger} rank-1 concentration (PC1 $\approx 81\%$) than the early phase (PC1 $\approx 60\%$). After the $\lambda$-switch, the optimizer locks into a tighter low-rank drift --- but in a different direction.
+
+
+\subsection{Transition Region and $\lambda$-Induced Bending}
+
+To track how reorientation unfolds, we measure the alignment of each sliding-window backbone to the two phase backbones:
+%
+\[
+A_E(t) = \bigl|\langle v_{\mathrm{roll}}(t),\; v_E \rangle\bigr|, \qquad
+A_L(t) = \bigl|\langle v_{\mathrm{roll}}(t),\; v_L \rangle\bigr|.
+\]
+
+These reveal a clean handoff (representative values from seed 42; seed 271 is nearly identical):
+%
+\begin{center}
+\begin{tabular}{rccl}
+\toprule
+Window center & $A_E$ & $A_L$ & Phase \\
+\midrule
+1100 & 0.83 & 0.16 & Early backbone dominant \\
+2300 & 0.61 & 0.28 & Fading \\
+3500 & 0.02 & 0.16 & \textbf{Dead zone} --- neither backbone \\
+4700 & 0.21 & 0.59 & Late backbone emerging \\
+5300 & 0.20 & 0.69 & Peak late alignment \\
+7100 & 0.18 & 0.29 & Late backbone fading \\
+8900 & 0.18 & 0.02 & Neither --- late plateau \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Around step 3500, $A_E \approx 0$ and $A_L \approx 0.15$: the optimization trajectory passes through a \emph{geometric transition zone} aligned to neither phase backbone. Late-phase alignment $A_L$ peaks near step 4700--5300, then decays. By step 8000+, the drift direction is orthogonal to both $v_E$ and $v_L$, consistent with the very late plateau phase.
+
+The rotation dip in $\rho(t)$ (minimum at step $\approx$5000) coincides with this transition, confirming that the $\lambda$-switch (step 4000) perturbs the training vector field and bends the slow manifold. Importantly, the bending is continuous: there is no discontinuity in tangent direction.
+
+
+\subsection{Power-Law Dynamics: Before and After the $\lambda$-Switch}
+
+The backbone coordinate $a(t) = \langle \Delta\theta_t, v_b \rangle$ and residual $\|r(t)\| = \|\Delta\theta_t - a(t) v_b\|$ obey distinct power-law regimes. We fit $|a(t)| = C_a t^{\gamma_a}$ and $\|r(t)\| = C_r t^{\gamma_r}$ in four windows:
+
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+ & \multicolumn{2}{c}{$\gamma_a$ (backbone)} & \multicolumn{2}{c}{$\gamma_r$ (residual)} \\
+Regime & Seed 42 & Seed 271 & Seed 42 & Seed 271 \\
+\midrule
+0--2000 & $+2.07$ & $+2.07$ & $+1.24$ & $+1.26$ \\
+2000--4000 & $+0.67$ & $+0.67$ & $-0.39$ & $-0.43$ \\
+4000--6000 & $+0.15$ & $+0.12$ & $-1.33$ & $-1.38$ \\
+6000--10000 & $-0.19$ & $-0.20$ & $+0.36$ & $+0.32$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+All fits have $R^2 > 0.85$ (most $> 0.97$). Three dynamical phases emerge:
+
+\begin{enumerate}
+\item \textbf{Acceleration (0--2k):} Backbone grows as $a \sim t^{2.1}$, residual as $r \sim t^{1.2}$. Both parallel and perpendicular motion accelerate.
+\item \textbf{Consolidation (2k--4k):} Backbone decelerates ($\gamma_a \approx 0.67$) while residual actively \emph{contracts} ($\gamma_r \approx -0.4$). The model consolidates along the backbone.
+\item \textbf{Post-switch:} The $\lambda$-switch at step 4000 triggers the sharpest residual collapse ($\gamma_r \approx -1.35$ in 4k--6k), followed by backbone \emph{retreat} ($\gamma_a \approx -0.19$) and residual re-growth ($\gamma_r \approx +0.34$) in the 6k--10k plateau.
+\end{enumerate}
+
+The overall before/after picture: $\gamma_a$ drops from $+1.74$ (0--4k) to $-0.08$ (4k--10k), and $\gamma_r$ drops from $+0.84$ to $-0.31$, confirming that the $\lambda$-switch arrests and reverses the dominant drift.
+
+
+\subsection{Correlation Between Probe Accuracy and Residual Geometry}
+
+To connect backbone geometry to task performance, we compute Pearson correlations between probe OOD accuracy $p_{\mathrm{ood}}$ and residual norm $\|r(t)\|$:
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+Regime & Seed 42 & Seed 271 \\
+\midrule
+Full range (0--10k) & $+0.61$ & $+0.45$ \\
+0--4000 & $+0.85$ & $+0.76$ \\
+4000--10000 & $+0.43$ & $+0.28$ \\
+6000--10000 & $-0.73$ & $-0.79$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The correlation \emph{flips sign}: in the early phase, growing residual energy accompanies improving probe accuracy ($r \approx +0.8$). After step 6000, the re-growing residual is associated with \emph{declining} probe accuracy ($r \approx -0.76$). The early residual reflects productive exploration of directions useful for the probe task; the late residual reflects drift away from the solution.
+
+
+\subsection{Optimizer Integration Creates the Slow Direction}
+
+The effective update under AdamW is
+%
+\[
+u_t = -\frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \epsilon} - \mu\,\theta_t,
+\]
+%
+where momentum integrates gradient history and second-moment normalization rescales coordinates. Two mechanisms produce coherent slow drift:
+
+\paragraph{(i) Momentum integrates weak signed bias.} Even if instantaneous projections onto $v_b(t)$ are small, a persistent sign bias accumulates in the momentum buffer. Momentum acts as a temporal low-pass filter, increasing the signal-to-noise ratio of temporally coherent gradient components.
+
+\paragraph{(ii) Adaptive normalization suppresses incoherent variance.} Coordinates with high variance but low mean are downscaled; coordinates with small but consistent bias are preserved. This selectively amplifies temporally coherent directions.
+
+Evidence from the $\beta_2$ ablation supports this mechanism. Disabling the second-moment estimator ($\beta_2 = 0$) dramatically weakens backbone concentration and update alignment:
+
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+$\beta_2$ & PC1\% & Drift magnitude & Mean $|\cos(u, v_b)|$ & Best $p_{\mathrm{ood}}$ \\
+\midrule
+0.99 & 68.1 & 106 & 0.226 & 0.951 \\
+0.95 & 68.4 & 108 & 0.225 & 0.939 \\
+0.90 & 66.3 & 113 & 0.220 & 0.814 \\
+0.80 & 63.4 & 128 & 0.214 & 0.682 \\
+0.0 & 51.6 & 211{,}694 & 0.099 & 0.005 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Without second-moment normalization ($\beta_2 = 0$), PC1 concentration drops from $\approx$68\% to 52\%, update--backbone alignment halves (0.23 $\to$ 0.10), drift magnitude explodes by $\sim$2000$\times$, and probe accuracy collapses entirely.
+
+
+\subsection{Update--Backbone Alignment and Sign Reversal}
+
+Using 200-step cumulative updates $u(t) = \theta(t) - \theta(t-200)$, we observe strong alignment with the global backbone. For seed 271 (layer 0, representative):
+%
+\[
+|\cos\angle(u(t), v_b)| \approx 0.15\text{--}0.32 \quad \text{(steps 100--1900)},
+\]
+%
+roughly $20$--$30\times$ above the isotropic noise floor of $\sim$0.01.
+
+The \emph{signed} alignment exhibits a characteristic reversal:
+%
+\begin{itemize}
+\item Steps 100--4700: $\cos < 0$ (drift along $-v_b$), peaking at $|\cos| \approx 0.32$ near step 1700.
+\item Step $\approx$5100: sign flip ($\cos$ crosses zero).
+\item Steps 5100--10000: $\cos > 0$ (drift along $+v_b$), saturating at $|\cos| \approx 0.11$.
+\end{itemize}
+
+This sign reversal coincides with both the $\lambda$-switch and the backbone rotation documented in \S4.4. The optimizer does not merely slow; it redirects cumulative drift. The post-reversal alignment is weaker ($0.11$ vs.\ $0.32$), consistent with the slower late-phase dynamics.
+
+
+\subsection{Backbone Stiffening Under Rotation}
+
+Fisher information analysis shows that curvature along the backbone direction increases by orders of magnitude during training. The Rayleigh quotient $q_b = v_b^T H v_b$ (approximated via Fisher diagonal) and anisotropy ratio $\alpha = q_b / \mathbb{E}[q_{\mathrm{rand}}]$ evolve as follows (seed 42):
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+Step & Label & $q_b$ & Anisotropy $\alpha$ \\
+\midrule
+200 & Init & $2.4 \times 10^{-6}$ & 1.35 \\
+1800 & Peak (pre-switch) & $2.5 \times 10^{-6}$ & 1.92 \\
+4800 & Trough (post-switch) & $1.6 \times 10^{-4}$ & 12.4 \\
+9600 & Late peak & $8.1 \times 10^{-3}$ & 4.81 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The backbone Rayleigh quotient increases by $\sim$3000$\times$ from step 200 to 9600. Anisotropy spikes to 12.4$\times$ at step 4800 (the first post-switch trough), indicating that curvature concentrates along the backbone precisely when the $\lambda$-switch reorients the drift. The subsequent decline to $\alpha \approx 4.8$ at step 9600 reflects the late-phase plateau where backbone motion slows.
+
+Thus backbone rotation and stiffening are coupled: they are two aspects of the same dynamical reorganization triggered by the objective reweighting.
+
+
+\subsection{Geometric Interpretation}
+
+The cumulative trajectory admits the decomposition
+%
+\[
+\theta(t) = \theta(0) + a(t)\,v_b(t) + r(t), \qquad r(t) \perp v_b(t),
+\]
+%
+where $a(t)$ tracks slow drift along the manifold and $r(t)$ captures transverse dynamics.
+
+Because adjacent rolling tangents maintain high alignment ($\rho > 0.7$), the manifold has bounded local curvature. But because phase-level backbones satisfy $|\langle v_E, v_L\rangle| \approx 0.32$, the manifold is globally curved by $\approx 71°$.
+
+The $\lambda$-transition concentrates curvature in the 4k--6k region, producing a transient geometric dead zone (both $A_E$ and $A_L$ small) through which the slow direction rotates. The post-switch phase is more rank-1 concentrated (PC1 $\approx 81\%$) but evolves in a nearly orthogonal direction.
+
+
+\subsection{Summary of Mechanism}
+
+The backbone is:
+\begin{itemize}
+\item not aligned with instantaneous gradients,
+\item not the top Fisher eigenvector,
+\item not a static direction fixed by the loss landscape.
+\end{itemize}
+
+It is instead:
+\begin{itemize}
+\item a locally dominant tangent to a curved slow manifold,
+\item induced by optimizer integration of temporally coherent gradient bias,
+\item stabilized by second-moment normalization ($\beta_2$ ablation: PC1 drops 68\% $\to$ 52\% at $\beta_2 = 0$),
+\item reoriented by objective reweighting ($|\langle v_E, v_L\rangle| \approx 0.32$ at the $\lambda$-switch),
+\item and correlated with task performance: $\mathrm{corr}(p_{\mathrm{ood}}, \|r\|) \approx +0.8$ early, $\approx -0.8$ late.
+\end{itemize}
+
+The optimizer does not merely change convergence speed --- it shapes the geometry of the cumulative trajectory, creating a smooth slow manifold whose curvature is controlled by the training objective.
