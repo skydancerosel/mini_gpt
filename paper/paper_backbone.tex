@@ -1013,13 +1013,46 @@ structure, while removing it entirely (SGD) collapses it.  This suggests that
 adaptive second-moment scaling, not momentum alone, is critical for the
 observed structure.
 
+\subsection{Functional Consequence: Reheating Recoverability}\label{sec:beta2-reheat}
+
+A downstream readout of backbone geometry is the ability to re-excite the
+transverse probe mode via reheating (\Cref{sec:reheating}).  We apply the same
+reheating protocol ($\lambda = 4.0$, fresh optimizer, 2{,}000 steps,
+$\eta = 6 \times 10^{-4}$) to checkpoints from the $\beta_2$ runs
+(\Cref{tab:beta2-reheat}).
+
+\begin{table}[t]
+\centering
+\caption{Best reheated $p_{\mathrm{ood}}$ under $\beta_2$ variation.
+         Reheating uses $\eta = 6 \times 10^{-4}$, $\lambda = 4.0$,
+         2{,}000 steps from each checkpoint.}
+\label{tab:beta2-reheat}
+\begin{tabular}{@{}cccc@{}}
+\toprule
+$\beta_2$ & Checkpoint & Best $p_{\mathrm{ood}}$ & Re-entry gain $G$ \\
+\midrule
+0.95 & 2000 & 0.672 & $+0.000$ \\
+0.95 & 4000 & 0.421 & $+0.200$ \\
+0.80 & 2000 & 0.191 & $+0.002$ \\
+0.80 & 4000 & 0.131 & $+0.006$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Lower $\beta_2$ weakens the transverse probe mode and reduces re-excitation
+under identical reheating.  At $\beta_2 = 0.95$, the probe basin at step~2000
+is deep enough that reheating recovers to the original peak; by step~4000,
+recovery is partial.  At $\beta_2 = 0.80$, the basin is effectively flat at
+both checkpoints.  This confirms that $\beta_2$ controls not only static
+trajectory geometry but also the dynamical accessibility of transverse modes.
+
 \subsection{Summary}
 
 Across controlled $\beta_2$ variations, we observe a smooth degradation of
-backbone dominance and trajectory complexity.  These results support the
-hypothesis that the backbone is optimizer-induced, emerging from second-moment
-stabilization of cumulative update directions rather than instantaneous
-gradient alignment or local curvature structure.
+backbone dominance, trajectory complexity, and reheating recoverability.
+These results support the hypothesis that the backbone is optimizer-induced,
+emerging from second-moment stabilization of cumulative update directions
+rather than instantaneous gradient alignment or local curvature structure.
 
 
 % ══════════════════════════════════════════════════════════════════════════════
