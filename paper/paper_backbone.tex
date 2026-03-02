@@ -546,7 +546,7 @@ Without second-moment normalization ($\beta_2 = 0$), PC1 concentration drops fro
 
 \subsection{Update--Backbone Alignment and Sign Reversal}\label{sec:update-alignment}
 
-Using 200-step cumulative updates $u(t) = \theta(t) - \theta(t-200)$, we observe strong alignment with the global backbone. For seed 271 (layer 0, representative):
+Using 200-step cumulative updates $u(t) = \theta(t) - \theta(t-200)$, we observe strong alignment with the global backbone (\Cref{fig:alignment-linchpin}). For seed 271 (layer 0, representative):
 %
 \[
 |\cos\angle(u(t), v_b)| \approx 0.15\text{--}0.32 \quad \text{(steps 100--1900)},
@@ -564,10 +564,23 @@ The \emph{signed} alignment exhibits a characteristic reversal:
 
 This sign reversal coincides with both the $\lambda$-switch and the backbone rotation documented in \S4.4. The optimizer does not merely slow; it redirects cumulative drift. The post-reversal alignment is weaker ($0.11$ vs.\ $0.32$), consistent with the slower late-phase dynamics.
 
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/fig_B_alignment_linchpin.pdf}
+    \caption{\textbf{Gradient vs.\ optimizer-update alignment with the backbone
+    (Block~0, seed~42).}  The 200-step optimizer update $\mathbf{u}_t$ (blue)
+    aligns strongly with the backbone ($|\cos| \approx 0.15$--$0.34$), peaking
+    before the $\lambda$-transition (dashed line) and declining afterward.
+    Per-batch gradients $\mathbf{g}_t$ (grey squares) remain at the random
+    noise floor (${\sim}4 \times 10^{-4}$) throughout.  The backbone emerges
+    from optimizer integration, not instantaneous gradient structure.}
+    \label{fig:alignment-linchpin}
+\end{figure}
+
 
 \subsection{Backbone Stiffening Under Rotation}\label{sec:fisher}
 
-Fisher information analysis shows that curvature along the backbone direction increases by orders of magnitude during training. The Rayleigh quotient $q_b = v_b^T H v_b$ (approximated via Fisher diagonal) and anisotropy ratio $\alpha = q_b / \mathbb{E}[q_{\mathrm{rand}}]$ evolve as follows (seed 42):
+Fisher information analysis shows that curvature along the backbone direction increases by orders of magnitude during training (\Cref{fig:fisher-stiffening}). The Rayleigh quotient $q_b = v_b^T H v_b$ (approximated via Fisher diagonal) and anisotropy ratio $\alpha = q_b / \mathbb{E}[q_{\mathrm{rand}}]$ evolve as follows (seed 42):
 
 \begin{center}
 \begin{tabular}{lccc}
@@ -585,6 +598,19 @@ Step & Label & $q_b$ & Anisotropy $\alpha$ \\
 The backbone Rayleigh quotient increases by $\sim$3000$\times$ from step 200 to 9600. Anisotropy spikes to 12.4$\times$ at step 4800 (the first post-switch trough), indicating that curvature concentrates along the backbone precisely when the $\lambda$-switch reorients the drift. The subsequent decline to $\alpha \approx 4.8$ at step 9600 reflects the late-phase plateau where backbone motion slows.
 
 Thus backbone rotation and stiffening are coupled: they are two aspects of the same dynamical reorganization triggered by the objective reweighting.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.65\linewidth]{figures/fig_C_fisher_stiffening.pdf}
+    \caption{\textbf{Fisher curvature along key directions (seed~42).}
+    \emph{Top:} Rayleigh quotient $q(\mathbf{v})$ for the backbone (blue),
+    switch direction (red), second PC (green), and mean over random orthogonal
+    directions (grey).  The backbone curvature increases by three orders of
+    magnitude.
+    \emph{Bottom:} Anisotropy ratio $\alpha = q(\vb) / \E[q(\mathbf{w}_\perp)]$
+    spikes at the $\lambda$-transition (step~4000) before partially relaxing.}
+    \label{fig:fisher-stiffening}
+\end{figure}
 
 
 \subsection{Geometric Interpretation}
