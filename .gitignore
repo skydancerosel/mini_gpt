@@ -8,9 +8,13 @@ __pycache__/
 *.egg-info/
 .eggs/
 
-# LaTeX build artifacts
-*.aux
+# Papers, LaTeX, and PDFs (kept locally, not in repo)
+paper/
+*.tex
+*.bib
 *.bbl
+*.pdf
+*.aux
 *.blg
 *.log
 *.out
@@ -18,9 +22,21 @@ __pycache__/
 *.fls
 *.fdb_latexmk
 *.synctex.gz
+*_arxiv.zip
 
-# Keep compiled PDF
-!paper/paper_backbone.pdf
+# Spectral edge thesis (separate project)
+spectral_edge_thesis.*
+spectral_edge_notes*
+
+# Large external codebases
+karpathy_llmc/
+karpathy_llmc_v2/
+
+# Autoresearch experiments
+autoresearch/
+
+# GPT-2 124M scaling experiments (separate project)
+scale_124M/
 
 # arXiv upload staging
 arxiv_upload/
@@ -38,6 +54,10 @@ arxiv_upload.zip
 
 # Claude config
 .claude/
+
+# Stray / junk files
+)
+).pub
 
 # Root-level backward-compat symlinks (for running experiments)
 /pilot.py

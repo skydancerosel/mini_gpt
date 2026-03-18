@@ -144,6 +144,8 @@ def main():
                         help="Path to checkpoint to resume from (fresh optimizer, LR reset)")
     parser.add_argument("--continue-from", type=str, default=None,
                         help="Path to checkpoint to continue training from (same LR schedule, fresh optimizer)")
+    parser.add_argument("--no-early-stop", action="store_true",
+                        help="Disable grokking early-stop check")
     args = parser.parse_args()
 
     device = get_device()
@@ -363,10 +365,11 @@ def main():
             n_accum = 0
 
             # Early check: if OOD acc > 0.8 for 5 consecutive evals, declare grokking
-            recent = [m["probe_ood_acc"] for m in metrics[-5:]]
-            if len(recent) >= 5 and all(r >= 0.8 for r in recent):
-                print(f"\n  >>> GROKKED at step {step}! (probe_ood >= 0.8 for 5 evals)")
-                break
+            if not args.no_early_stop:
+                recent = [m["probe_ood_acc"] for m in metrics[-5:]]
+                if len(recent) >= 5 and all(r >= 0.8 for r in recent):
+                    print(f"\n  >>> GROKKED at step {step}! (probe_ood >= 0.8 for 5 evals)")
+                    break
 
         # Additional checkpoint saves (dense/sparse cadence, between eval points)
         if not (step % args.eval_every == 0 or step == 1):

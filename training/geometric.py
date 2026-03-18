@@ -249,12 +249,12 @@ def detect_emergence(accuracy_trace, threshold=0.8, consecutive=3):
         emergence_step or None
     """
     count = 0
-    for step, acc in accuracy_trace:
+    for i, (step, acc) in enumerate(accuracy_trace):
         if acc >= threshold:
             count += 1
             if count >= consecutive:
                 # Return the step where it first crossed
-                return accuracy_trace[accuracy_trace.index((step, acc)) - consecutive + 1][0]
+                return accuracy_trace[i - consecutive + 1][0]
         else:
             count = 0
     return None
@@ -283,12 +283,12 @@ def detect_defect_onset(defect_trace, baseline_window=10, sigma_mult=3.0,
     threshold = baseline_mean + sigma_mult * baseline_std
 
     count = 0
-    for step, val in defect_trace[baseline_window:]:
+    for i, (step, val) in enumerate(defect_trace[baseline_window:]):
         if val > threshold:
             count += 1
             if count >= sustained:
                 # Return the step where elevation started
-                idx = defect_trace.index((step, val)) - sustained + 1
+                idx = baseline_window + i - sustained + 1
                 return defect_trace[idx][0]
         else:
             count = 0

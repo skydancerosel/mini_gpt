@@ -159,15 +159,20 @@ class TinyStoriesProbeDataset(Dataset):
 
     def _make_lm_example(self, tokens):
         """Standard LM example: truncate/pad to seq_len+1, return input/target."""
-        if len(tokens) > self.seq_len + 1:
-            start = self.rng.randint(0, len(tokens) - self.seq_len - 1)
+        real_len = len(tokens)
+        if real_len > self.seq_len + 1:
+            start = self.rng.randint(0, real_len - self.seq_len - 1)
             tokens = tokens[start:start + self.seq_len + 1]
-        elif len(tokens) < self.seq_len + 1:
+            real_len = self.seq_len + 1
+        elif real_len < self.seq_len + 1:
             pad_id = self.tokenizer.eos_token_id or 0
-            tokens = tokens + [pad_id] * (self.seq_len + 1 - len(tokens))
+            tokens = tokens + [pad_id] * (self.seq_len + 1 - real_len)
 
         input_ids = torch.tensor(tokens[:self.seq_len], dtype=torch.long)
         targets = torch.tensor(tokens[1:self.seq_len + 1], dtype=torch.long)
+        # Mask out padding positions so they don't contribute to loss
+        if real_len < self.seq_len + 1:
+            targets[real_len - 1:] = -100
         probe_mask = torch.zeros(self.seq_len, dtype=torch.bool)
         return input_ids, targets, probe_mask
 
@@ -210,22 +215,30 @@ class TinyStoriesProbeDataset(Dataset):
         full_seq = prefix + key_tokens + middle_tokens + query_tokens
 
         # Truncate or pad to seq_len + 1
-        if len(full_seq) > self.seq_len + 1:
+        real_len = len(full_seq)
+        if real_len > self.seq_len + 1:
             full_seq = full_seq[:self.seq_len + 1]
-        elif len(full_seq) < self.seq_len + 1:
+            real_len = self.seq_len + 1
+        elif real_len < self.seq_len + 1:
             # Add more from original text as suffix
-            remaining = self.seq_len + 1 - len(full_seq)
+            remaining = self.seq_len + 1 - real_len
             suffix_start = min(prefix_len + desired_gap, len(tokens))
             suffix = tokens[suffix_start:suffix_start + remaining]
+            real_len_with_suffix = real_len + len(suffix)
             if len(suffix) < remaining:
                 pad_id = self.tokenizer.eos_token_id or 0
                 suffix = suffix + [pad_id] * (remaining - len(suffix))
             full_seq = full_seq + suffix
+            real_len = real_len_with_suffix
 
         full_seq = full_seq[:self.seq_len + 1]
+        real_len = min(real_len, self.seq_len + 1)
 
         input_ids = torch.tensor(full_seq[:self.seq_len], dtype=torch.long)
         targets = torch.tensor(full_seq[1:self.seq_len + 1], dtype=torch.long)
+        # Mask out padding positions so they don't contribute to loss
+        if real_len < self.seq_len + 1:
+            targets[real_len - 1:] = -100
 
         # Mark positions where the codeword appears in the query answer
         # The probe_mask marks target positions corresponding to codeword tokens

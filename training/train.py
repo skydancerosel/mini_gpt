@@ -245,6 +245,12 @@ def train(cfg: Config, data: dict, run_tag: str = "default"):
 
         # ── Capability control ─────────────────────────────────────────
         if cfg.control_lambda > 0 and step % cfg.control_every == 0:
+            # Save training gradients before update_basis destroys them
+            saved_grads = {
+                name: p.grad.clone() if p.grad is not None else None
+                for name, p in model.named_parameters()
+            }
+
             try:
                 lm_batch = next(lm_iter)
             except StopIteration:
@@ -261,6 +267,10 @@ def train(cfg: Config, data: dict, run_tag: str = "default"):
                 (probe_batch[0], probe_batch[1]),
                 device,
             )
+
+            # Restore training gradients
+            for name, p in model.named_parameters():
+                p.grad = saved_grads[name]
 
         if cfg.control_lambda > 0:
             suppressor.suppress_gradient()

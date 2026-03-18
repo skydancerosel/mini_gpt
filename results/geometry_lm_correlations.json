@@ -1,0 +1,10 @@
+{
+  "n_runs": 4,
+  "correlations": {
+    "corr(mean_PC1_0_2k, time_to_val1.8)": -0.24388097519615354,
+    "corr(mean_align_u_0_2k, time_to_val1.8)": -0.9348402098031929,
+    "corr(mean_PC1_0_10k, final_val_loss)": 0.32121770349102996,
+    "corr(best_p_ood, mean_PC1_0_2k)": 0.9650782667908807,
+    "corr(AUC_p_ood, mean_align_u_0_2k)": 0.12479544579938101
+  }
+}
