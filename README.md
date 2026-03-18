@@ -1,107 +1,35 @@
-# Mini-GPT: Optimizer Geometry and Drift Manifolds
+# Mini-GPT: Optimizer Geometry and Training Trajectory Spectral Analysis
 
-This repository studies the geometry of Transformer training dynamics, focusing on:
-
-- **Low-dimensional drift ("backbone") structure** under AdamW
-- **Transverse switching dynamics** between competing objectives
-- **Backbone decomposition** into longitudinal and residual components with power-law scaling
-- **Optimizer-induced effects** (AdamW vs SGD family)
-- **Second-moment memory ablations** across varying β₂
-- **Reheating** and capability recovery from late-training checkpoints
-
-The goal is to understand how optimizers shape cumulative training trajectories, not just loss curves.
+This repository provides the code and data for two papers on the geometry of transformer training dynamics.
 
 ---
 
 ## Papers
 
-Two papers are associated with this repository:
+### Paper 1: Optimizer-Induced Low-Dimensional Drift and Transverse Dynamics in Transformer Training
+**arXiv:** [2602.23696](https://arxiv.org/abs/2602.23696)
 
-1. **Optimizer-Integrated Drift and Transverse Attractor Switching in Transformer Training** (Xu, 2026)
-   — Empirical characterization of the backbone–residual decomposition, power-law scaling, and optimizer dependence.
+AdamW training produces a dominant low-dimensional drift direction ("backbone") capturing 60–80% of cumulative parameter displacement. This direction is stable within rolling windows but globally rotates ~71° across training. SGD-family optimizers do not produce this structure. Reducing β₂ smoothly degrades it. Reheating experiments show transverse probe modes can be re-excited without altering the backbone.
 
-2. **The Spectral Edge Thesis: Intra-Signal Gap Dynamics in Transformer Training** (Xu, 2026, in preparation)
-   — A self-contained mathematical framework showing that phase transitions in training are controlled by the maximum spectral gap within the signal hierarchy of rolling-window parameter updates. Validated across six model families (TinyStories 51M, GPT-2 124M, Dyck, SCAN, single-task and multi-task modular arithmetic), with 6 of 7 predictions confirmed and no contradictions.
+**Reproduce:** [`reproduce/paper1_backbone/`](reproduce/paper1_backbone/)
 
-Related companion papers on grokking:
-- **Low-Dimensional and Transversely Curved Optimization Dynamics in Grokking** (Xu, 2026) — Single-task modular arithmetic
-- **Multi-Task Grokking: Geometric Phase Transitions in Shared-Trunk Transformers** (Xu, 2026) — Multi-task modular arithmetic
-- **Grokking in Dyck Languages and SCAN: Commutator Defects as Early-Warning Signals** (Xu, 2026) — Dyck-1 and SCAN compositional generalization
+### Paper 2: Spectral Edge Dynamics of Training Trajectories: Signal–Noise Geometry Across Scales
+**arXiv:** [2603.15678](https://arxiv.org/abs/2603.15678)
 
----
+Rolling-window SVD of parameter updates reveals a sharp spectral edge between coherent optimization directions and stochastic noise. Across TinyStories 51M (4 seeds) and GPT-2 124M, the edge exhibits a universal rise–plateau–collapse pattern, the signal rank k\* adjusts with task complexity (k\*=2 at 51M, k\*=3 at 124M), and the directional coupling between spectral geometry and validation loss reverses with window size. JL projection enables application to arbitrary model sizes.
 
-## Core Findings
+**Reproduce:** [`reproduce/paper2_sed/`](reproduce/paper2_sed/)
 
-### 1. Optimizer-Induced Backbone
-
-During AdamW training, cumulative parameter drift concentrates along a single dominant direction:
-
-- ~65–70% of cumulative drift lies along PC1 (the "backbone") after row normalization.
-- The dominant direction is highly stable over rolling windows (mean |cos| > 0.98 within-window) yet reorients gradually across phases (~71° between early and late backbones).
-- Optimizer-integrated updates align with the backbone (|cos| ~ 0.2–0.3), while per-batch gradients do not.
-
-This demonstrates that the backbone emerges from accumulated optimizer dynamics, not instantaneous gradient structure.
-
-### 2. Backbone Decomposition and Power-Law Scaling
-
-Decomposing cumulative drift Δθ(t) into backbone projection a(t) and residual r(t):
-
-| Regime | γ\_a (backbone) | R² | γ\_r (residual) | R² |
-|--------|-----------------|-----|-----------------|-----|
-| 0–2K   | ~1.97           | 0.98 | ~0.78          | 0.89 |
-| 2K–4K  | ~−0.01 (plateau)| 0.01 | ~0.36          | 0.95 |
-| Full   | ~1.32           | 0.84 | ~0.55          | 0.83 |
-
-- **Backbone projection** grows as t² early then saturates — the backbone "stiffens."
-- **Residual norm** grows sublinearly throughout — ongoing exploration in transverse directions.
-- Correlation corr(p_ood, ‖r(t)‖) is strongly positive early (+0.86) and reverses later (−0.93).
-
-### 3. Transverse Switching Dynamics
-
-Oscillations in probe performance live in directions orthogonal to the backbone:
-
-- Switching directions satisfy |cos(v_sw, v_b)| ~ 0.20–0.31 across seeds.
-- Residual PCs (PC2–PC6) capture switching dynamics, with corr(‖r‖, p_ood) = −0.91.
-- Fisher curvature along the backbone increases by 3 orders of magnitude during training (backbone stiffening).
-
-### 4. β₂ Controls Backbone Geometry
-
-Altering AdamW's second-moment normalization (β₂) systematically changes trajectory geometry (4,000 steps, seed 42):
-
-| β₂ | Val Loss | Best p_ood | PC1 (%) | Drift | \|cos(u, v_b)\| |
-|------|----------|------------|---------|-------|-----------------|
-| 0.99 | 1.16 | 0.951 | 68.8 | 120 | 0.243 |
-| 0.95 | 1.21 | 0.939 | 68.3 | 123 | 0.244 |
-| 0.90 | 1.37 | 0.814 | 66.7 | 128 | 0.234 |
-| 0.80 | 1.47 | 0.682 | 63.8 | 141 | 0.227 |
-| 0.0  | diverged | 0.005 | 52.5 | 161,931 | 0.238 |
-
-### 5. SGD Controls
-
-| Optimizer | PC1 (%) | k95 | Drift | Best p_ood |
-|-----------|---------|-----|-------|------------|
-| **AdamW** | **61.5** | **9** | **113.7** | **0.433** |
-| SGD (no mom) | 100.0 | 1 | 40.2 | 0.000 |
-| SGD + momentum | 100.0 | 1 | 54.2 | 0.015 |
-| SGD + Nesterov + SGDW | --- | --- | --- | 0.013 |
-
-Only AdamW develops coherent multi-dimensional backbone structure.
-
-### 6. Theoretical Support: Intra-Signal Gap Framework
-
-The backbone–residual decomposition is explained by the intra-signal gap framework (theory paper in preparation). Key results:
-
-- The rolling-window Gram spectrum has gap position **k\* = 1** in 77.8% of windows — the backbone *is* the single mode above the spectral gap.
-- The stability coefficient **α₁ ≈ 0.82** (Davis–Kahan bound) explains backbone persistence.
-- Subdominant directions have **α_j ≈ 0** for j ≥ 3, explaining why transverse directions rotate freely.
-- The gap ratio R(t) = σ₁/σ₂ follows a **rise → plateau → collapse** pattern that mirrors the three dynamical phases.
-- Gap–loss cross-correlation |r| = 0.67, confirming that spectral structure tracks learning progress.
+### Theory (in preparation)
+A companion mathematical framework — *The Spectral Edge Thesis* — provides theoretical foundations connecting BBP phase transitions, Davis–Kahan subspace perturbation, and gap flow equations to the empirical phenomena documented in these papers. Validated across grokking experiments on modular arithmetic, Dyck languages, and SCAN (48 controlled runs, 24/24 grok with weight decay, 0/24 without).
 
 ---
 
 ## Model
 
-Decoder-only Transformer (GPT-2 family): 8 layers, d_model=512, 16 heads, d_ff=2048, 51M parameters. Trained on [TinyStories](https://huggingface.co/datasets/roneneldan/TinyStories) with an embedded long-range key-retrieval probe task (10% of training sequences).
+Decoder-only Transformer (GPT-2 family): 8 layers, d_model=512, 16 heads, d_ff=2048, 51M parameters. Trained on [TinyStories](https://huggingface.co/datasets/roneneldan/TinyStories) with an embedded long-range key-retrieval probe task.
+
+Paper 2 also uses GPT-2 124M (12 layers, d=768) pretrained on FineWeb 10B and fine-tuned on OpenWebText.
 
 ---
 
@@ -110,98 +38,71 @@ Decoder-only Transformer (GPT-2 family): 8 layers, d_model=512, 16 heads, d_ff=2
 ```
 mini_gpt/
 │
-├── training/                               # Core library and training
-│   ├── config.py                           #   Configuration dataclass, get_device()
+├── reproduce/                              # Paper-specific reproduction guides
+│   ├── paper1_backbone/README.md           #   Section-by-section script mapping
+│   └── paper2_sed/                         #   SED reproduction
+│       ├── README.md                       #   Property-by-property script mapping
+│       ├── tinystories/                    #   TinyStories 51M scripts (§3)
+│       └── gpt2_124m/                      #   GPT-2 124M scripts (§4)
+│
+├── training/                               # Core library
+│   ├── config.py                           #   Configuration
 │   ├── model.py                            #   GPT-2 model definition
 │   ├── dataset.py                          #   TinyStories + probe dataset
-│   ├── pilot.py                            #   Lightweight training / evaluation
+│   ├── pilot.py                            #   Training / evaluation
 │   ├── train.py                            #   Main training loop
 │   ├── geometric.py                        #   Geometric analysis utilities
-│   ├── control.py                          #   Subspace suppression
-│   └── pilot_backbone_pruning.py           #   Backbone pruning experiment
+│   └── control.py                          #   Subspace suppression
 │
-├── analysis/
-│   ├── backbone/                           # Backbone structure analysis
-│   │   ├── trajectory_pca.py               #   Uncentered PCA on cumulative drift
-│   │   ├── update_alignment.py             #   Update–backbone alignment
-│   │   └── residual_decomposition.py       #   Gradient alignment + energy split
-│   │
-│   ├── basin/                              # Basin geometry (B-series tests)
-│   │   ├── B1_basin_test.py                #   B1-B3: basin recovery, scatter, switching
-│   │   ├── B6_basin_depth.py               #   B6-B7: basin depth, manifold dimension
-│   │   └── eval_noise.py                   #   Bootstrap p_ood variance estimation
-│   │
-│   ├── switching/                          # Switching dynamics
-│   │   ├── switching_alignment.py          #   Block-level trajectory + logit lens
-│   │   └── detect_oscillations.py          #   Auto-detect peaks/troughs
-│   │
-│   ├── fisher/                             # Fisher information analysis
-│   │   ├── fisher_analysis.py              #   Empirical Fisher spectrum
-│   │   └── rayleigh_quotients.py           #   Backbone Rayleigh quotients
-│   │
-│   ├── beta_sweep/                         # Second-moment memory ablation
-│   │   └── beta_summary.py                 #   Per-run + cross-run analysis
-│   │
-│   ├── backbone_decomposition/             # Output: 10K backbone analysis
-│   └── beta2_backbone/                     # Output: β₂ ablation backbone analysis
+├── analysis/                               # Analysis scripts and outputs
+│   ├── backbone/                           #   Backbone PCA, alignment, decomposition
+│   ├── backbone_decomposition/             #   Output: timeseries, fits, plots
+│   ├── beta2_backbone/                     #   Output: β₂ ablation results
+│   ├── basin/                              #   Basin geometry tests
+│   ├── switching/                          #   Switching dynamics
+│   ├── fisher/                             #   Fisher curvature analysis
+│   └── beta_sweep/                         #   β₂ sweep analysis
 │
-├── experiments/
-│   ├── sgd_controls/                       # SGD-family optimizer ablation
-│   └── beta_sweep/                         # Second-moment memory experiments
+├── experiments/                            # Experiment runners
+│   ├── sgd_controls/                       #   SGD-family optimizer ablation
+│   └── beta_sweep/                         #   β₂ training sweep
 │
-├── backbone_decomposition.py               # Backbone a(t)/r(t) decomposition
-├── backbone_regime_analysis.py             # Piecewise power-law fits + correlations
-├── backbone_phase_alignment.py             # Early vs late backbone alignment
-├── backbone_rotation_curve.py              # Sliding-window rotation curve ρ(t)
-├── beta2_backbone_analysis.py              # Full β₂ ablation backbone analysis
-├── beta2_reheating.py                      # β₂ reheating (standalone)
-├── geometry_correlation.py                 # Geometry–LM performance correlations
-├── geometry_rigorous.py                    # Rigorous statistical tests
-├── theory_experiment_match.py              # Theory vs experiment verification
+├── backbone_decomposition.py               # Paper 1: backbone a(t)/r(t)
+├── backbone_regime_analysis.py             # Paper 1: power-law fits
+├── backbone_phase_alignment.py             # Paper 1: early/late alignment
+├── backbone_rotation_curve.py              # Paper 1: rotation curve ρ(t)
+├── beta2_backbone_analysis.py              # Paper 1: β₂ ablation
+├── beta2_reheating.py                      # Paper 1: reheating experiments
+├── theory_experiment_match.py              # Paper 2: TinyStories SED analysis
+├── geometry_rigorous.py                    # Paper 2: Granger / statistical tests
 │
-├── figures/                                # Plotting and visualization
-│   ├── make_paper_figures.py               #   Generate publication figures
-│   ├── plot.py                             #   General plotting utilities
-│   └── plot_delta_significance.py          #   Switch-pair significance plots
-│
-├── results/                                # Analysis output (JSON, CSV, plots)
-├── scripts/                                # Shell orchestration
-├── _paths.py                               # Path setup (import in scripts)
+├── figures/                                # Figure generation
+├── results/                                # Analysis outputs (JSON, CSV, plots)
 ├── requirements.txt
 └── README.md
 ```
 
 ---
 
-## Setup
+## Quick Start
 
 ```bash
 pip install -r requirements.txt
+
+# Train a baseline model
+python training/pilot.py --seed 42 --wd 0.5 --lr 0.001 --steps 10000
+
+# Run backbone analysis (Paper 1)
+python backbone_decomposition.py
+python backbone_regime_analysis.py
+python backbone_rotation_curve.py
+
+# Run spectral edge analysis (Paper 2)
+python theory_experiment_match.py
+python geometry_rigorous.py
 ```
 
 Requires Python 3.10+ and PyTorch 2.0+. Runs on CUDA, MPS (Apple Silicon), or CPU.
-
-## Reproducing Results
-
-### Training
-
-| Task | Command |
-|------|---------|
-| Train baseline AdamW (10K steps) | `python training/pilot.py --seed 42 --wd 0.5 --lr 0.001 --steps 10000` |
-| Run β₂ ablation | `bash experiments/beta_sweep/run_beta2_overnight.sh` |
-| β₂ reheating only | `python beta2_reheating.py --base-dir runs/beta2_ablation/` |
-| SGD control experiments | `python experiments/sgd_controls/sgd_control.py` |
-| Full seed pipeline | `bash scripts/run_seed.sh 42` |
-
-### Backbone Analysis Pipeline
-
-| Step | Script | What it does |
-|------|--------|--------------|
-| 1 | `backbone_decomposition.py` | SVD on cumulative drift → a(t), r(t) timeseries |
-| 2 | `backbone_regime_analysis.py` | Piecewise power-law fits (γ\_a, γ\_r) + p_ood correlations |
-| 3 | `backbone_phase_alignment.py` | Early/late backbone directions + ⟨v\_E, v\_L⟩ alignment |
-| 4 | `backbone_rotation_curve.py` | Sliding-window rotation ρ(t) curve |
-| 5 | `beta2_backbone_analysis.py` | Full β₂ ablation: decomposition + fits + cross-β₂ comparison |
 
 ---
 
@@ -209,9 +110,18 @@ Requires Python 3.10+ and PyTorch 2.0+. Runs on CUDA, MPS (Apple Silicon), or CP
 
 ```bibtex
 @article{xu2026backbone,
-  title={Optimizer-Integrated Drift and Transverse Attractor Switching
+  title={Optimizer-Induced Low-Dimensional Drift and Transverse Dynamics
          in Transformer Training},
   author={Xu, Yongzhong},
+  journal={arXiv preprint arXiv:2602.23696},
+  year={2026}
+}
+
+@article{xu2026sed,
+  title={Spectral Edge Dynamics of Training Trajectories:
+         Signal--Noise Geometry Across Scales},
+  author={Xu, Yongzhong},
+  journal={arXiv preprint arXiv:2603.15678},
   year={2026}
 }
 ```
