@@ -1,0 +1,180 @@
+{
+  "model": "allenai/OLMoE-1B-7B-0924",
+  "revision": "main",
+  "n_examples": 2000,
+  "top_k": 6,
+  "induction_threshold": 50.0,
+  "spectral_picks_layers": [
+    1,
+    0,
+    2
+  ],
+  "n_induction_screen": 4,
+  "results": [
+    {
+      "name": "baseline",
+      "spec": {},
+      "n_ablated": 0,
+      "loss": 8.515625,
+      "acc_top1": 0.04800000041723251,
+      "acc_top5": 0.10750000178813934,
+      "mean_logit_B": 2.1541602783203126
+    },
+    {
+      "name": "ablate_top6_by_integral",
+      "spec": {
+        "1": [
+          5,
+          3
+        ],
+        "0": [
+          14,
+          15
+        ],
+        "2": [
+          7,
+          8
+        ]
+      },
+      "n_ablated": 6,
+      "loss": 8.921875,
+      "acc_top1": 0.03200000151991844,
+      "acc_top5": 0.0689999982714653,
+      "mean_logit_B": 1.738556396484375
+    },
+    {
+      "name": "ablate_matched_random_same_layers",
+      "spec": {
+        "1": [
+          9,
+          12
+        ],
+        "0": [
+          5,
+          6
+        ],
+        "2": [
+          6,
+          12
+        ]
+      },
+      "n_ablated": 6,
+      "loss": 8.34375,
+      "acc_top1": 0.06800000369548798,
+      "acc_top5": 0.1315000057220459,
+      "mean_logit_B": 2.3396103515625
+    },
+    {
+      "name": "ablate_full_spec_layers (upper bound)",
+      "spec": {
+        "1": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "0": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "2": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ]
+      },
+      "n_ablated": 48,
+      "loss": 8.53125,
+      "acc_top1": 0.04699999839067459,
+      "acc_top5": 0.10350000113248825,
+      "mean_logit_B": 2.197469299316406
+    },
+    {
+      "name": "ablate_induction_screen_>=50x (4h)",
+      "spec": {
+        "5": [
+          10
+        ],
+        "7": [
+          0
+        ],
+        "9": [
+          8
+        ],
+        "12": [
+          14
+        ]
+      },
+      "n_ablated": 4,
+      "loss": 10.640625,
+      "acc_top1": 0.0,
+      "acc_top5": 0.0024999999441206455,
+      "mean_logit_B": 0.009734542846679687
+    },
+    {
+      "name": "ablate_L7H0_only (induction class)",
+      "spec": {
+        "7": [
+          0
+        ]
+      },
+      "n_ablated": 1,
+      "loss": 9.078125,
+      "acc_top1": 0.01850000023841858,
+      "acc_top5": 0.0494999997317791,
+      "mean_logit_B": 1.5785679321289063
+    },
+    {
+      "name": "ablate_L9H8_only (induction class)",
+      "spec": {
+        "9": [
+          8
+        ]
+      },
+      "n_ablated": 1,
+      "loss": 9.875,
+      "acc_top1": 0.0044999998062849045,
+      "acc_top5": 0.012500000186264515,
+      "mean_logit_B": 0.7533419494628906
+    }
+  ]
+}
