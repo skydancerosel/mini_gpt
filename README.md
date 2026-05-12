@@ -1,6 +1,6 @@
-# Mini-GPT: Optimizer Geometry, Spectral Edge Dynamics, and Probe-Circuits Across Architectures
+# Mini-GPT: Optimizer Geometry and Training Trajectory Spectral Analysis
 
-Code and data for three papers on the geometry of transformer training dynamics and mechanistic interpretability — spanning architectures (dense GPT-2, MoE) and scales (51M, 124M, 160M, 410M, 1B-7B).
+This repository provides the code and data for two papers on the geometry of transformer training dynamics.
 
 ---
 
@@ -20,34 +20,16 @@ Rolling-window SVD of parameter updates reveals a sharp spectral edge between co
 
 **Reproduce:** [`reproduce/paper2_sed/`](reproduce/paper2_sed/)
 
-### Paper 3: Spectral Probe-Circuits Across Architectures and Training Data — *Pythia 1B, OLMo 1B, OLMoE 1B-7B*
-
-Per-head participation-ratio (PR) trajectory over training, plus a capability-specific all-head selectivity screen, identifies small (3–4 head) induction circuits in **five LMs spanning two architecture families (dense transformer + MoE) and two pretraining datasets (Pile + DCLM): Pythia 160M / 410M / 1B, OLMo 1B (dense), OLMoE 1B-7B (MoE).**
-
-- The 3–4 head capability screen at induction-selectivity ≥ 50× tanks synthetic-induction top-1 from ~5% → 0% across all five models; on natural-text contexts the same circuit produces a 5–7× differential effect over matched-random ablations.
-- "Best class" mech-interp classification breaks down on attention-sink-dominated architectures; capability-specific selectivity screens are robust. Whole-model BOS-class fractions range 43% (Pythia 160M Pile) → 78% (OLMo 1B DCLM) on synthetic batches; 15% (Pythia 160M) → 84% (OLMo 1B) on natural-text. Scale, training data (DCLM > Pile by ~20pp), and architecture (MoE *reduces* BOS ~10pp vs dense) all contribute.
-- **L0 and L1 have zero BOS-classified heads across all five models** — a universal architectural property of decoder-only LMs at 100M+ scale. The BOS-attention attractor kicks in from L2 (DCLM-trained) or L4–L6 (Pile-trained); the layer-of-onset is data-dependent, but the L0/L1 floor is universal.
-
-**Reproduce:** [`reproduce/paper3_probe_circuits/`](reproduce/paper3_probe_circuits/) · **Blog write-up:** [`reproduce/paper3_probe_circuits/BLOG.md`](reproduce/paper3_probe_circuits/BLOG.md)
-
 ### Theory (in preparation)
 A companion analytical-empirical study — *Spectral Edge Dynamics: An Analytical-Empirical Study of Phase Transitions in Neural Network Training* — develops the analytical machinery for the spectral edge phenomena observed across these papers: gap dynamics equations, a spectral loss decomposition, and an adiabatic parameter for training stability. Verified across modular arithmetic, Dyck-1, SCAN, and GPT-2-class transformer training (48 controlled grokking runs: 24/24 grok with weight decay, 0/24 without).
 
 ---
 
-## Models analyzed
+## Model
 
-| Paper | Model | Scale | Data | Architecture |
-|-------|-------|------:|------|--------------|
-| Papers 1, 2 | Mini-GPT (TS-51M) | 51M | TinyStories + probe injection | GPT-2 family |
-| Paper 2 | GPT-2 124M (Karpathy) | 124M | FineWeb-10B → OpenWebText | GPT-2 |
-| **Paper 3** | **Pythia 160M / 410M / 1B** | **160M – 1B** | **The Pile** | **GPT-NeoX (dense)** |
-| **Paper 3** | **OLMo-1B-0724-hf** | **1B** | **DCLM-aligned** | **OLMo (dense)** |
-| **Paper 3** | **OLMoE-1B-7B-0924** | **1B active / 7B total** | **DCLM** | **OLMo-MoE** |
+Decoder-only Transformer (GPT-2 family): 8 layers, d_model=512, 16 heads, d_ff=2048, 51M parameters. Trained on [TinyStories](https://huggingface.co/datasets/roneneldan/TinyStories) with an embedded long-range key-retrieval probe task.
 
-Decoder-only Transformer for Paper 1/2 base model: 8 layers, d_model=512, 16 heads, d_ff=2048, 51M parameters. Trained on [TinyStories](https://huggingface.co/datasets/roneneldan/TinyStories) with an embedded long-range key-retrieval probe task.
-
-Paper 3 uses pretrained checkpoints from EleutherAI ([pythia-160m](https://huggingface.co/EleutherAI/pythia-160m) / [pythia-410m](https://huggingface.co/EleutherAI/pythia-410m) / [pythia-1b](https://huggingface.co/EleutherAI/pythia-1b)) and AllenAI ([OLMo-1B-0724-hf](https://huggingface.co/allenai/OLMo-1B-0724-hf), [OLMoE-1B-7B-0924](https://huggingface.co/allenai/OLMoE-1B-7B-0924)), all on Hugging Face.
+Paper 2 also uses GPT-2 124M (12 layers, d=768) pretrained on FineWeb 10B and fine-tuned on OpenWebText.
 
 ---
 
@@ -58,18 +40,10 @@ mini_gpt/
 │
 ├── reproduce/                              # Paper-specific reproduction guides
 │   ├── paper1_backbone/README.md           #   Section-by-section script mapping
-│   ├── paper2_sed/                         #   SED reproduction
-│   │   ├── README.md                       #   Property-by-property script mapping
-│   │   ├── tinystories/                    #   TinyStories 51M scripts (§3)
-│   │   └── gpt2_124m/                      #   GPT-2 124M scripts (§4)
-│   └── paper3_probe_circuits/              #   Probe-circuits cross-architecture extension
-│       ├── README.md                       #   Full writeup (5-model methodology + results)
-│       ├── BLOG.md                         #   Blog-style summary
-│       ├── shared/                         #   Induction-batch builder, shared helpers
-│       ├── pythia/                         #   Pythia 160M/410M/1B scripts
-│       ├── olmo_dense/                     #   OLMo-1B-0724-hf (dense) scripts
-│       ├── olmoe/                          #   OLMoE-1B-7B-0924 (MoE) scripts
-│       └── results/                        #   Selectivity matrices, ablation JSONs, plots
+│   └── paper2_sed/                         #   SED reproduction
+│       ├── README.md                       #   Property-by-property script mapping
+│       ├── tinystories/                    #   TinyStories 51M scripts (§3)
+│       └── gpt2_124m/                      #   GPT-2 124M scripts (§4)
 │
 ├── training/                               # Core library
 │   ├── config.py                           #   Configuration
