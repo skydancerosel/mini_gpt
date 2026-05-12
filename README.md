@@ -31,7 +31,7 @@ Per-head participation-ratio (PR) trajectory over training, plus a capability-sp
 **Reproduce:** [`reproduce/paper3_probe_circuits/`](reproduce/paper3_probe_circuits/) · **Blog write-up:** [`reproduce/paper3_probe_circuits/BLOG.md`](reproduce/paper3_probe_circuits/BLOG.md)
 
 ### Theory (in preparation)
-A companion mathematical framework — *The Spectral Edge Thesis* — provides theoretical foundations connecting BBP phase transitions, Davis–Kahan subspace perturbation, and gap flow equations to the empirical phenomena documented in these papers. Validated across grokking experiments on modular arithmetic, Dyck languages, and SCAN (48 controlled runs, 24/24 grok with weight decay, 0/24 without).
+A companion analytical-empirical study — *Spectral Edge Dynamics: An Analytical-Empirical Study of Phase Transitions in Neural Network Training* — develops the analytical machinery for the spectral edge phenomena observed across these papers: gap dynamics equations, a spectral loss decomposition, and an adiabatic parameter for training stability. Verified across modular arithmetic, Dyck-1, SCAN, and GPT-2-class transformer training (48 controlled grokking runs: 24/24 grok with weight decay, 0/24 without).
 
 ---
 
